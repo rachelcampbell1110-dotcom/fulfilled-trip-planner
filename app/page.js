@@ -20,6 +20,8 @@ const ACTIVITY_OPTIONS = [
 export default function Home() {
   const [submitted, setSubmitted] = useState(null);
   const [showAccessibility, setShowAccessibility] = useState(false);
+  const [loadingWx, setLoadingWx] = useState(false);   // NEW
+  const [errorWx, setErrorWx] = useState("");          // NEW
 
   const {
     register,
@@ -39,59 +41,34 @@ export default function Home() {
         { name: "", age: "", type: "adult" },
         { name: "", age: "", type: "child" },
       ],
-      context_flags: {
-        traveling_solo: false,
-        single_parent: false,
-      },
+      context_flags: { traveling_solo: false, single_parent: false },
       activities: [],
-      accessibility: {
-        mobility: false,
-        sensory: false,
-        medical: false,
-        dietary: false,
-        notes: "",
-      },
+      accessibility: { mobility: false, sensory: false, medical: false, dietary: false, notes: "" },
       logistics: {
-        fly: {
-          departure_airport: "",
-          airline: "",
-          flight_time_local: "",
-        },
-        drive: {
-          start_location: "",
-          estimated_hours: "",
-        },
-        day_trip: {
-          transport: "car",
-        },
+        fly: { departure_airport: "", airline: "", flight_time_local: "" },
+        drive: { start_location: "", estimated_hours: "" },
+        day_trip: { transport: "car" },
       },
-      venue_input: {
-        name: "",
-        city: "",
-        type_hint: "",
-        activities: [],
-        known_venue_id: "",
-      },
+      venue_input: { name: "", city: "", type_hint: "", activities: [], known_venue_id: "" },
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "travelers",
-  });
+  const { fields, append, remove } = useFieldArray({ control, name: "travelers" });
 
   const mode = watch("mode");
   const start = watch("start_date");
   const end = watch("end_date");
+  const endMin = start || ""
 
   // Keep Day Trip to single date (mirror start->end)
   useMemo(() => {
-    if (mode === "day_trip" && start && start !== end) {
-      setValue("end_date", start);
-    }
+    if (mode === "day_trip" && start && start !== end) setValue("end_date", start);
   }, [mode, start, end, setValue]);
 
   const onSubmit = async (values) => {
+    setErrorWx("");
+    setLoadingWx(true);
+
     // Build trip_input
     const cleanedTravelers = values.travelers
       .filter((t) => t.name?.trim())
@@ -137,7 +114,7 @@ export default function Home() {
       ...(venue_input ? { venue_input } : {}),
     };
 
-    // Fetch weather
+    // Fetch weather (with safe content-type check)
     let weather_summary = null;
     try {
       const res = await fetch("/api/weather", {
@@ -151,24 +128,29 @@ export default function Home() {
           },
         }),
       });
-      const data = await res.json();
+
+      const ct = res.headers.get("content-type") || "";
+      const data = ct.includes("application/json") ? await res.json() : { error_html: await res.text() };
+
       if (!res.ok) throw new Error(data?.error || "Weather error");
+
       weather_summary = {
         avg_high_f: data?.summary?.avg_high_f ?? null,
         avg_low_f: data?.summary?.avg_low_f ?? null,
         wet_days_pct: data?.summary?.wet_days_pct ?? null,
         notes: data?.summary?.notes ?? "",
         daily: data?.daily ?? [],
+        matched_location: data?.matched_location ?? null, 
       };
     } catch (e) {
       console.error("Weather fetch failed:", e);
+      setErrorWx("Could not fetch weather. Please check destination & dates, then try again.");
+    } finally {
+      setLoadingWx(false);
     }
 
     const payload = {
-      trip_input: {
-        ...trip_input,
-        ...(weather_summary ? { weather_summary } : {}),
-      },
+      trip_input: { ...trip_input, ...(weather_summary ? { weather_summary } : {}) },
       constraints: {
         packing_groups_required: ["carry_on", "checked_bag", "day_bag", "car_backseat", "car_trunk"],
         timebands_required: ["T-14", "T-7", "T-3", "T-1", "day_of"],
@@ -182,30 +164,17 @@ export default function Home() {
   };
 
   // Simple styles
-  const card = {
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: "16px",
-    marginBottom: "16px",
-  };
+  const card = { border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 16 };
   const label = { display: "block", fontWeight: 600, marginBottom: 6 };
   const row = { display: "flex", gap: 12, flexWrap: "wrap" };
-  const input = {
-    padding: "8px 10px",
-    border: "1px solid #d1d5db",
-    borderRadius: 8,
-    width: "100%",
-    maxWidth: 320,
-  };
+  const input = { padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 8, width: "100%", maxWidth: 320 };
 
   return (
     <main style={{ padding: 20, maxWidth: 980, margin: "0 auto", fontFamily: "system-ui, Arial" }}>
       <h1 style={{ marginBottom: 8 }}>The Fulfilled Trip Planner</h1>
-      <p style={{ marginBottom: 16 }}>
-        Fill this out and submit to preview the JSON we’ll send to the AI planner.
-      </p>
+      <p style={{ marginBottom: 16 }}>Fill this out and submit to preview the JSON we’ll send to the AI planner.</p>
 
-      {/* Put the entire input UI inside the form so Enter submits */}
+      {/* Put all inputs inside the form so Enter submits; button is disabled while loading */}
       <form onSubmit={handleSubmit(onSubmit)}>
         {/* Travel Mode */}
         <section style={card}>
@@ -214,15 +183,8 @@ export default function Home() {
             {["fly", "drive", "day_trip"].map((m) => (
               <label
                 key={m}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  border: "1px solid #ddd",
-                  borderRadius: 10,
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid #ddd", borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}
+                title={m === "fly" ? "Fly ✈️" : m === "drive" ? "Drive 🚗" : "Day Trip 📅"}
               >
                 <input type="radio" value={m} {...register("mode", { required: true })} />
                 {m === "fly" ? "✈️ Fly" : m === "drive" ? "🚗 Drive / Road Trip" : "📅 Day Trip"}
@@ -250,38 +212,23 @@ export default function Home() {
             </div>
             <div>
               <label style={label}>Destination</label>
-              <input
-                placeholder="City, State/Country"
-                {...register("destination", { required: true })}
-                style={input}
-              />
-              {errors.destination && (
-                <div style={{ color: "crimson" }}>Destination is required.</div>
-              )}
+              <input placeholder="City, State/Country" {...register("destination", { required: true })} style={input} />
+              {errors.destination && <div style={{ color: "crimson" }}>Destination is required.</div>}
             </div>
             <div>
               <label style={label}>Start Date</label>
               <input type="date" {...register("start_date", { required: true })} style={input} />
-              {errors.start_date && (
-                <div style={{ color: "crimson" }}>Start date is required.</div>
-              )}
+              {errors.start_date && <div style={{ color: "crimson" }}>Start date is required.</div>}
             </div>
             <div>
               <label style={label}>{mode === "day_trip" ? "Date (Same Day)" : "End Date"}</label>
-              <input
-                type="date"
-                {...register("end_date", { required: mode !== "day_trip" })}
-                style={input}
-                disabled={mode === "day_trip"}
-              />
-              {mode !== "day_trip" && errors.end_date && (
-                <div style={{ color: "crimson" }}>End date is required.</div>
-              )}
+              <input type="date" {...register("end_date", { required: mode !== "day_trip" })} style={input} disabled={mode === "day_trip"} />
+              {mode !== "day_trip" && errors.end_date && <div style={{ color: "crimson" }}>End date is required.</div>}
             </div>
           </div>
         </section>
 
-        {/* Travelers */}
+        {/* Travelers (names & ages) */}
         <section style={card}>
           <div style={{ marginBottom: 10, fontWeight: 700 }}>Travelers</div>
           <div style={row}>
@@ -297,21 +244,11 @@ export default function Home() {
             <div key={field.id} style={{ ...row, marginTop: 10, alignItems: "flex-end" }}>
               <div>
                 <label style={label}>Name</label>
-                <input
-                  placeholder="Name"
-                  {...register(`travelers.${idx}.name`, { required: false })}
-                  style={input}
-                />
+                <input placeholder="Name" {...register(`travelers.${idx}.name`, { required: false })} style={input} />
               </div>
               <div>
                 <label style={label}>Age</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Age"
-                  {...register(`travelers.${idx}.age`)}
-                  style={input}
-                />
+                <input type="number" min="0" placeholder="Age" {...register(`travelers.${idx}.age`)} style={input} />
               </div>
               <div>
                 <label style={label}>Type</label>
@@ -320,21 +257,13 @@ export default function Home() {
                   <option value="child">Child</option>
                 </select>
               </div>
-              <button
-                type="button"
-                onClick={() => remove(idx)}
-                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}
-              >
+              <button type="button" onClick={() => remove(idx)} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}>
                 Remove
               </button>
             </div>
           ))}
 
-          <button
-            type="button"
-            onClick={() => append({ name: "", age: "", type: "adult" })}
-            style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}
-          >
+          <button type="button" onClick={() => append({ name: "", age: "", type: "adult" })} style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}>
             + Add Traveler
           </button>
         </section>
@@ -347,27 +276,15 @@ export default function Home() {
             <div style={row}>
               <div>
                 <label style={label}>Departure Airport</label>
-                <input
-                  placeholder="e.g., MCO"
-                  {...register("logistics.fly.departure_airport", { required: true })}
-                  style={input}
-                />
+                <input placeholder="e.g., MCO" {...register("logistics.fly.departure_airport", { required: true })} style={input} />
               </div>
               <div>
                 <label style={label}>Airline</label>
-                <input
-                  placeholder="e.g., JetBlue"
-                  {...register("logistics.fly.airline", { required: true })}
-                  style={input}
-                />
+                <input placeholder="e.g., JetBlue" {...register("logistics.fly.airline", { required: true })} style={input} />
               </div>
               <div>
                 <label style={label}>Flight Time (local)</label>
-                <input
-                  type="time"
-                  {...register("logistics.fly.flight_time_local", { required: true })}
-                  style={input}
-                />
+                <input type="time" {...register("logistics.fly.flight_time_local", { required: true })} style={input} />
               </div>
             </div>
           )}
@@ -376,22 +293,11 @@ export default function Home() {
             <div style={row}>
               <div>
                 <label style={label}>Starting Location</label>
-                <input
-                  placeholder="City, ST"
-                  {...register("logistics.drive.start_location", { required: true })}
-                  style={input}
-                />
+                <input placeholder="City, ST" {...register("logistics.drive.start_location", { required: true })} style={input} />
               </div>
               <div>
                 <label style={label}>Estimated Hours</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  placeholder="e.g., 6"
-                  {...register("logistics.drive.estimated_hours", { required: true })}
-                  style={input}
-                />
+                <input type="number" min="0" step="0.5" placeholder="e.g., 6" {...register("logistics.drive.estimated_hours", { required: true })} style={input} />
               </div>
             </div>
           )}
@@ -414,25 +320,9 @@ export default function Home() {
         {/* Activities */}
         <section style={card}>
           <div style={{ marginBottom: 10, fontWeight: 700 }}>Activities (check all that apply)</div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-              gap: 8,
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 8 }}>
             {ACTIVITY_OPTIONS.map((opt) => (
-              <label
-                key={opt.key}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  border: "1px solid #eee",
-                  borderRadius: 8,
-                  padding: "6px 10px",
-                }}
-              >
+              <label key={opt.key} style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #eee", borderRadius: 8, padding: "6px 10px" }}>
                 <input type="checkbox" value={opt.key} {...register("activities")} />
                 {opt.label}
               </label>
@@ -441,13 +331,9 @@ export default function Home() {
         </section>
 
         {/* Venue (only if relevant) */}
-        {(watch("activities") || []).some((a) =>
-          ["sports_event", "concert_show", "theme_park"].includes(a)
-        ) && (
+        {(watch("activities") || []).some((a) => ["sports_event", "concert_show", "theme_park"].includes(a)) && (
           <section style={card}>
-            <div style={{ marginBottom: 10, fontWeight: 700 }}>
-              Venue Details (optional, helps with bag policy)
-            </div>
+            <div style={{ marginBottom: 10, fontWeight: 700 }}>Venue Details (optional, helps with bag policy)</div>
             <div style={row}>
               <div>
                 <label style={label}>Venue Name</label>
@@ -472,11 +358,7 @@ export default function Home() {
 
         {/* Accessibility */}
         <section style={card}>
-          <button
-            type="button"
-            onClick={() => setShowAccessibility((s) => !s)}
-            style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ddd", marginBottom: 10 }}
-          >
+          <button type="button" onClick={() => setShowAccessibility((s) => !s)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ddd", marginBottom: 10 }}>
             {showAccessibility ? "−" : "+"} Accessibility & Special Considerations
           </button>
 
@@ -498,49 +380,42 @@ export default function Home() {
               </div>
               <div style={{ marginTop: 10 }}>
                 <label style={label}>Notes</label>
-                <textarea
-                  rows={3}
-                  placeholder="Any details you'd like us to account for…"
-                  {...register("accessibility.notes")}
-                  style={{ ...input, maxWidth: "100%" }}
-                />
+                <textarea rows={3} placeholder="Any details you'd like us to account for…" {...register("accessibility.notes")} style={{ ...input, maxWidth: "100%" }} />
               </div>
             </>
           )}
         </section>
 
         {/* Submit */}
-        <button
-          type="submit"
-          style={{
-            padding: "10px 16px",
-            borderRadius: 10,
-            border: "1px solid #0ea5e9",
-            background: "#0ea5e9",
-            color: "white",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          🔮 Create My Trip Prep Plan (Preview JSON)
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            type="submit"
+            disabled={loadingWx}
+            style={{
+              padding: "10px 16px",
+              borderRadius: 10,
+              border: "1px solid #0ea5e9",
+              background: loadingWx ? "#93c5fd" : "#0ea5e9",
+              color: "white",
+              fontWeight: 700,
+              cursor: loadingWx ? "not-allowed" : "pointer",
+              opacity: loadingWx ? 0.8 : 1,
+            }}
+          >
+            {loadingWx ? "Fetching Weather…" : "🔮 Create My Trip Prep Plan (Preview JSON)"}
+          </button>
+
+          {loadingWx && <span aria-live="polite">Fetching weather… ⛅</span>}
+          {errorWx && <span style={{ color: "crimson" }}>{errorWx}</span>}
+        </div>
       </form>
 
       {/* JSON Preview */}
       {submitted && (
         <section style={{ ...card, marginTop: 16 }}>
           <div style={{ marginBottom: 8, fontWeight: 700 }}>Preview Payload</div>
-          <pre
-            style={{
-              whiteSpace: "pre-wrap",
-              overflowX: "auto",
-              background: "#0b1020",
-              color: "#e5f0ff",
-              padding: 12,
-              borderRadius: 10,
-            }}
-          >
-            {JSON.stringify(submitted, null, 2)}
+          <pre style={{ whiteSpace: "pre-wrap", overflowX: "auto", background: "#0b1020", color: "#e5f0ff", padding: 12, borderRadius: 10 }}>
+{JSON.stringify(submitted, null, 2)}
           </pre>
           <p style={{ marginTop: 8, fontSize: 14, color: "#334155" }}>
             This is the JSON we’ll pass to <code>/api/weather</code> and <code>/api/plan</code> in Weeks 3–4.
@@ -550,3 +425,4 @@ export default function Home() {
     </main>
   );
 }
+
