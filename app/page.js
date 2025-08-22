@@ -1,7 +1,9 @@
 "use client";
 
 import { useForm, useFieldArray } from "react-hook-form";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import PlanPreview from "../components/PlanPreview.jsx";
+import { buildPlan } from "../lib/buildPlan.js";
 
 const ACTIVITY_OPTIONS = [
   { key: "lots_of_walking", label: "Lots of walking" },
@@ -17,11 +19,42 @@ const ACTIVITY_OPTIONS = [
   { key: "theme_park", label: "Theme Park 🎢" },
 ];
 
+// Canonical order for timeline merge (same as buildPlan)
+const CANON_ORDER = ["T-14", "T-7", "T-3", "T-1", "Day of"];
+function mergeTimelines(base = [], extra = []) {
+  const map = new Map();
+  const add = (e) => {
+    const day = String(e?.day ?? e?.when ?? "").trim();
+    if (!day) return;
+    const tasks = Array.isArray(e?.tasks) ? e.tasks.map(String).filter(Boolean)
+      : [String(e?.tasks || "")].filter(Boolean);
+    if (!map.has(day)) map.set(day, new Set());
+    const set = map.get(day);
+    tasks.forEach(t => set.add(t));
+  };
+  base.forEach(add);
+  extra.forEach(add);
+
+  const known = CANON_ORDER
+    .filter(d => map.has(d))
+    .map(d => ({ day: d, tasks: Array.from(map.get(d)) }));
+  const unknown = Array.from(map.keys())
+    .filter(d => !CANON_ORDER.includes(d))
+    .sort()
+    .map(d => ({ day: d, tasks: Array.from(map.get(d)) }));
+  return [...known, ...unknown];
+}
+
 export default function Home() {
   const [submitted, setSubmitted] = useState(null);
   const [showAccessibility, setShowAccessibility] = useState(false);
-  const [loadingWx, setLoadingWx] = useState(false);   // NEW
-  const [errorWx, setErrorWx] = useState("");          // NEW
+  const [loadingWx, setLoadingWx] = useState(false);
+  const [errorWx, setErrorWx] = useState("");
+
+  // destination autocomplete state
+  const [destQuery, setDestQuery] = useState("");
+  const [destOpts, setDestOpts] = useState([]);
+  const destTimer = useRef(null);
 
   const {
     register,
@@ -37,6 +70,8 @@ export default function Home() {
       destination: "",
       start_date: "",
       end_date: "",
+      accommodation: "",
+      transportation: "",
       travelers: [
         { name: "", age: "", type: "adult" },
         { name: "", age: "", type: "child" },
@@ -58,21 +93,45 @@ export default function Home() {
   const mode = watch("mode");
   const start = watch("start_date");
   const end = watch("end_date");
-  const endMin = start || ""
+  const endMin = start || "";
 
   // Keep Day Trip to single date (mirror start->end)
   useMemo(() => {
     if (mode === "day_trip" && start && start !== end) setValue("end_date", start);
   }, [mode, start, end, setValue]);
 
+  // ---- Destination autocomplete (debounced) ----
+  const destination = watch("destination");
+  useEffect(() => {
+    setDestQuery(destination || "");
+  }, [destination]);
+
+  useEffect(() => {
+    if (destTimer.current) clearTimeout(destTimer.current);
+    if (!destQuery || destQuery.length < 2) {
+      setDestOpts([]);
+      return;
+    }
+    destTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/places?q=${encodeURIComponent(destQuery)}`, { cache: "no-store" });
+        const j = await r.json();
+        setDestOpts(Array.isArray(j?.results) ? j.results : []);
+      } catch {
+        setDestOpts([]);
+      }
+    }, 250);
+    return () => destTimer.current && clearTimeout(destTimer.current);
+  }, [destQuery]);
+
   const onSubmit = async (values) => {
     setErrorWx("");
     setLoadingWx(true);
 
     // Build trip_input
-    const cleanedTravelers = values.travelers
-      .filter((t) => t.name?.trim())
-      .map((t) => ({
+    const cleanedTravelers = (values.travelers || [])
+      .filter(t => t.name?.trim())
+      .map(t => ({
         name: t.name.trim(),
         age: Number(t.age || 0),
         type: t.type === "adult" ? "adult" : "child",
@@ -84,24 +143,22 @@ export default function Home() {
       activities.includes("concert_show") ||
       activities.includes("theme_park");
 
-    const venue_input = hasVenueActivity
-      ? {
-          name: values.venue_input.name?.trim() || undefined,
-          city: values.venue_input.city?.trim() || undefined,
-          type_hint: values.venue_input.type_hint || undefined,
-          activities: activities.filter((a) =>
-            ["sports_event", "concert_show", "theme_park"].includes(a)
-          ),
-          known_venue_id: values.venue_input.known_venue_id?.trim() || undefined,
-        }
-      : undefined;
+    const venue_input = hasVenueActivity ? {
+      name: values.venue_input.name?.trim() || undefined,
+      city: values.venue_input.city?.trim() || undefined,
+      type_hint: values.venue_input.type_hint || undefined,
+      activities: activities.filter(a => ["sports_event","concert_show","theme_park"].includes(a)),
+      known_venue_id: values.venue_input.known_venue_id?.trim() || undefined,
+    } : undefined;
 
     const trip_input = {
       mode: values.mode,
       trip_type: values.trip_type,
-      destination: values.destination.trim(),
+      destination: (values.destination || "").trim(),
       start_date: values.start_date,
       ...(values.mode !== "day_trip" ? { end_date: values.end_date } : {}),
+      accommodation: values.accommodation || "",
+      transportation: values.transportation || "",
       travelers: cleanedTravelers,
       context_flags: values.context_flags,
       activities,
@@ -114,24 +171,33 @@ export default function Home() {
       ...(venue_input ? { venue_input } : {}),
     };
 
-    // Fetch weather (with safe content-type check)
+    // ---- Weather fetch (no-store + cache-buster + single retry) ----
+    const wxBody = {
+      trip_input: {
+        destination: trip_input.destination,
+        start_date: trip_input.start_date,
+        end_date: trip_input.end_date || trip_input.start_date,
+      },
+    };
+
     let weather_summary = null;
     try {
-      const res = await fetch("/api/weather", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trip_input: {
-            destination: trip_input.destination,
-            start_date: trip_input.start_date,
-            end_date: trip_input.end_date || trip_input.start_date,
-          },
-        }),
-      });
+      const doFetch = () =>
+        fetch(`/api/weather?cb=${Date.now()}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify(wxBody),
+        });
+
+      let res = await doFetch();
+      if (!res.ok) {
+        // quick retry once if first call failed
+        res = await doFetch();
+      }
 
       const ct = res.headers.get("content-type") || "";
       const data = ct.includes("application/json") ? await res.json() : { error_html: await res.text() };
-
       if (!res.ok) throw new Error(data?.error || "Weather error");
 
       weather_summary = {
@@ -139,8 +205,13 @@ export default function Home() {
         avg_low_f: data?.summary?.avg_low_f ?? null,
         wet_days_pct: data?.summary?.wet_days_pct ?? null,
         notes: data?.summary?.notes ?? "",
-        daily: data?.daily ?? [],
-        matched_location: data?.matched_location ?? null, 
+        daily: Array.isArray(data?.daily) ? data.daily : [],
+        matched_location:
+          typeof data?.matched_location === "string"
+            ? data.matched_location
+            : (data?.matched_location?.name
+                ? `${data.matched_location.name}${data?.matched_location?.country ? ", " + data.matched_location.country : ""}`
+                : undefined),
       };
     } catch (e) {
       console.error("Weather fetch failed:", e);
@@ -160,7 +231,39 @@ export default function Home() {
       },
     };
 
-    setSubmitted(payload);
+    // Build rule-based plan immediately
+    let plan = buildPlan(payload);
+
+    // Show plan right away; fetch AI tips, then merge
+    setSubmitted({ ...payload, _plan: plan, ai: { status: "loading" } });
+
+    try {
+      const planRes = await fetch(`/api/plan?cb=${Date.now()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(payload),
+      });
+      const planJson = await planRes.json();
+      const ai = planRes.ok ? planJson.ai : { error: planJson?.error || "AI unavailable" };
+
+      // Merge AI into plan (no dupes, keep canonical order)
+      if (!ai.error) {
+        const mergedTimeline = mergeTimelines(plan.timeline, ai.timeline || []);
+        plan = {
+          ...plan,
+          ai_blurb: ai.trip_blurb || "",
+          ai_venue_tips: Array.isArray(ai.venue_bag_policy_tips) ? ai.venue_bag_policy_tips : [],
+          ai_extra_todos: Array.isArray(ai.extra_to_dos) ? ai.extra_to_dos : [],
+          timeline: mergedTimeline,
+        };
+      }
+
+      setSubmitted(prev => ({ ...(prev || {}), _plan: plan, ai }));
+    } catch (e) {
+      console.error("Plan API error:", e);
+      setSubmitted(prev => ({ ...(prev || {}), ai: { error: "AI unavailable" } }));
+    }
   };
 
   // Simple styles
@@ -171,10 +274,9 @@ export default function Home() {
 
   return (
     <main style={{ padding: 20, maxWidth: 980, margin: "0 auto", fontFamily: "system-ui, Arial" }}>
-      <h1 style={{ marginBottom: 8 }}>The Fulfilled Trip Planner</h1>
-      <p style={{ marginBottom: 16 }}>Fill this out and submit to preview the JSON we’ll send to the AI planner.</p>
+      <h1 style={{ marginBottom: 8 }}>The Fulfilled Trip Planner - Beta</h1>
+      <p style={{ marginBottom: 16 }}>Fill this out and submit to see your plan! We are in testing mode and welcome feedback!</p>
 
-      {/* Put all inputs inside the form so Enter submits; button is disabled while loading */}
       <form onSubmit={handleSubmit(onSubmit)}>
         {/* Travel Mode */}
         <section style={card}>
@@ -212,7 +314,18 @@ export default function Home() {
             </div>
             <div>
               <label style={label}>Destination</label>
-              <input placeholder="City, State/Country" {...register("destination", { required: true })} style={input} />
+              <input
+                list="destinations"
+                placeholder="City, State/Country"
+                {...register("destination", { required: true })}
+                onChange={(e) => setDestQuery(e.target.value)}
+                style={input}
+              />
+              <datalist id="destinations">
+                {destOpts.map((o, i) => (
+                  <option key={i} value={o.label}>{o.full}</option>
+                ))}
+              </datalist>
               {errors.destination && <div style={{ color: "crimson" }}>Destination is required.</div>}
             </div>
             <div>
@@ -222,13 +335,45 @@ export default function Home() {
             </div>
             <div>
               <label style={label}>{mode === "day_trip" ? "Date (Same Day)" : "End Date"}</label>
-              <input type="date" {...register("end_date", { required: mode !== "day_trip" })} style={input} disabled={mode === "day_trip"} />
+              <input
+                type="date"
+                {...register("end_date", { required: mode !== "day_trip" })}
+                style={input}
+                disabled={mode === "day_trip"}
+                min={endMin}
+              />
               {mode !== "day_trip" && errors.end_date && <div style={{ color: "crimson" }}>End date is required.</div>}
+              {mode !== "day_trip" && start && end && end < start && (
+                <div style={{ color: "crimson" }}>End date can’t be before start date.</div>
+              )}
+            </div>
+          </div>
+
+          {/* Accommodation + Getting Around */}
+          <div style={{ ...row, marginTop: 10 }}>
+            <div>
+              <label style={label}>Accommodation</label>
+              <select {...register("accommodation")} style={input}>
+                <option value="">Select</option>
+                <option value="hotel">Hotel</option>
+                <option value="family">Family/Friends</option>
+                <option value="rental">Vacation Rental</option>
+              </select>
+            </div>
+            <div>
+              <label style={label}>Getting Around</label>
+              <select {...register("transportation")} style={input}>
+                <option value="">Select</option>
+                <option value="car">Car</option>
+                <option value="subway">Subway/Metro</option>
+                <option value="taxi">Taxi/Rideshare</option>
+                <option value="walk">Walking</option>
+              </select>
             </div>
           </div>
         </section>
 
-        {/* Travelers (names & ages) */}
+        {/* Travelers */}
         <section style={card}>
           <div style={{ marginBottom: 10, fontWeight: 700 }}>Travelers</div>
           <div style={row}>
@@ -402,7 +547,7 @@ export default function Home() {
               opacity: loadingWx ? 0.8 : 1,
             }}
           >
-            {loadingWx ? "Fetching Weather…" : "🔮 Create My Trip Prep Plan (Preview JSON)"}
+            {loadingWx ? "Fetching Weather…" : "🔮 Create My Trip Prep Plan"}
           </button>
 
           {loadingWx && <span aria-live="polite">Fetching weather… ⛅</span>}
@@ -410,19 +555,23 @@ export default function Home() {
         </div>
       </form>
 
-      {/* JSON Preview */}
-      {submitted && (
+      {/* Plan UI */}
+      {submitted?._plan && (
+        <PlanPreview
+          plan={submitted._plan}
+          loadingAi={submitted?.ai?.status === "loading"}
+        />
+      )}
+
+      {/* (Optional) Debug payload – visible only if NEXT_PUBLIC_SHOW_DEBUG="1" */}
+      {process.env.NEXT_PUBLIC_SHOW_DEBUG === "1" && submitted && (
         <section style={{ ...card, marginTop: 16 }}>
           <div style={{ marginBottom: 8, fontWeight: 700 }}>Preview Payload</div>
           <pre style={{ whiteSpace: "pre-wrap", overflowX: "auto", background: "#0b1020", color: "#e5f0ff", padding: 12, borderRadius: 10 }}>
-{JSON.stringify(submitted, null, 2)}
+            {JSON.stringify(submitted, null, 2)}
           </pre>
-          <p style={{ marginTop: 8, fontSize: 14, color: "#334155" }}>
-            This is the JSON we’ll pass to <code>/api/weather</code> and <code>/api/plan</code> in Weeks 3–4.
-          </p>
         </section>
       )}
     </main>
   );
 }
-
