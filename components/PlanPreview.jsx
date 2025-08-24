@@ -2,12 +2,82 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-export default function PlanPreview({ plan, loadingAi = false }) {
+export default function PlanPreview({ plan, ai, loadingAi = false }) {
   if (!plan) return null;
 
   // Local editable copy (for add-item UX)
   const [localPlan, setLocalPlan] = useState(plan);
   useEffect(() => setLocalPlan(plan), [plan]);
+
+  // --- Merge AI output when it arrives ---
+  useEffect(() => {
+    if (!ai || ai.error) return;
+
+    setLocalPlan((prev) => {
+      const next = structuredClone(prev || {});
+      // trip blurb
+      if (typeof ai.trip_blurb === "string" && ai.trip_blurb.trim()) {
+        next.ai_blurb = ai.trip_blurb.trim();
+      }
+      // venue tips
+      if (Array.isArray(ai.venue_bag_policy_tips)) {
+        next.ai_venue_tips = Array.from(new Set([...(next.ai_venue_tips || []), ...ai.venue_bag_policy_tips]));
+      }
+
+      // packing additions (add to combined + per-person)
+      if (Array.isArray(ai.packing_additions) && ai.packing_additions.length) {
+        next.packing = next.packing || { byPerson: {}, combined: [] };
+        const cset = new Set(next.packing.combined || []);
+        ai.packing_additions.forEach((x) => x && cset.add(x));
+        next.packing.combined = Array.from(cset);
+
+        const names = Object.keys(next.packing.byPerson || {});
+        names.forEach((nm) => {
+          const pset = new Set(next.packing.byPerson[nm] || []);
+          ai.packing_additions.forEach((x) => x && pset.add(x));
+          next.packing.byPerson[nm] = Array.from(pset);
+        });
+      }
+
+      // overpack additions
+      next.overpack = next.overpack || { skip: [], lastMinute: [], housePrep: [] };
+      const ok = ai.overpack_additions || {};
+      ["skip", "lastMinute", "housePrep"].forEach((k) => {
+        const adds = Array.isArray(ok[k]) ? ok[k] : [];
+        if (!adds.length) return;
+        const set = new Set(next.overpack[k] || []);
+        adds.forEach((x) => x && set.add(x));
+        next.overpack[k] = Array.from(set);
+      });
+
+      // timeline additions
+      const CANON = ["T-14", "T-7", "T-3", "T-1", "Day of"];
+      next.timeline = Array.isArray(next.timeline) ? [...next.timeline] : [];
+      const addsTL = Array.isArray(ai.timeline_additions) ? ai.timeline_additions : [];
+      addsTL.forEach((ent) => {
+        const day = (ent?.day || "").trim();
+        const tasks = (Array.isArray(ent?.tasks) ? ent.tasks : []).filter(Boolean);
+        if (!day || !tasks.length) return;
+        const idx = next.timeline.findIndex((e) => (e?.day || e?.when) === day);
+        if (idx >= 0) {
+          const s = new Set(next.timeline[idx].tasks || []);
+          tasks.forEach((t) => s.add(t));
+          next.timeline[idx].tasks = Array.from(s);
+        } else {
+          next.timeline.push({ day, tasks: Array.from(new Set(tasks)) });
+        }
+      });
+      // sort known days canonical first
+      next.timeline = [
+        ...CANON.filter((d) => next.timeline.some((e) => (e.day || e.when) === d)).map((d) =>
+          next.timeline.find((e) => (e.day || e.when) === d)
+        ),
+        ...next.timeline.filter((e) => !CANON.includes(e.day || e.when)),
+      ].filter(Boolean);
+
+      return next;
+    });
+  }, [ai]);
 
   const [packingMode, setPackingMode] = useState("person");
   const [newCombinedItem, setNewCombinedItem] = useState("");
@@ -231,6 +301,7 @@ export default function PlanPreview({ plan, loadingAi = false }) {
           {Array.isArray(basics.travelers?.names) && basics.travelers.names.length > 0 && (
             <div><strong>Names:</strong> {basics.travelers.names.join(", ")}</div>
           )}
+          {/* AI trip blurb shows here */}
           {localPlan.ai_blurb && <p style={{ marginTop: 10, fontStyle: "italic" }}>{localPlan.ai_blurb}</p>}
         </div>
 
@@ -432,12 +503,14 @@ export default function PlanPreview({ plan, loadingAi = false }) {
         </div>
       ) : null}
 
-      {/* Infant/Toddler (≤ 2 yrs) */}
-      {lodging?.infantToddler &&
-        Array.isArray(lodging.infantToddler) &&
-        lodging.infantToddler.length > 0 &&
-        Array.isArray(plan?.basics?.travelers?.ages) &&
-        plan.basics.travelers.ages.some((age) => typeof age === "number" && age <= 2) && (
+      {/* Infant/Toddler Lodging & Sleep (only show if any traveler age <= 2) */}
+      {(() => {
+        const ages = localPlan?.basics?.travelers?.ages || [];
+        const showInfant = Array.isArray(ages) && ages.some(a => typeof a === "number" && a <= 2);
+        return showInfant &&
+          lodging?.infantToddler &&
+          Array.isArray(lodging.infantToddler) &&
+          lodging.infantToddler.length > 0 ? (
           <div style={{ ...card }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Infant/Toddler Sleep Setup</div>
             <ul className="__checklist">
@@ -450,17 +523,8 @@ export default function PlanPreview({ plan, loadingAi = false }) {
               ))}
             </ul>
           </div>
-        )}
-
-      {/* Extra To-Dos (AI) */}
-      {Array.isArray(localPlan.ai_extra_todos) && localPlan.ai_extra_todos.length > 0 && (
-        <div style={{ ...card }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Extra To-Dos</div>
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {localPlan.ai_extra_todos.map((t, i) => <li key={i}>{t}</li>)}
-          </ul>
-        </div>
-      )}
+        ) : null;
+      })()}
 
       {/* Timeline */}
       <div style={{ ...card }}>
@@ -523,3 +587,5 @@ const btnStyle = {
   background: "#f8fafc",
   cursor: "pointer",
 };
+
+
