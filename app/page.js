@@ -1,9 +1,80 @@
+// app/page.js
 "use client";
 
 import { useForm, useFieldArray } from "react-hook-form";
 import { useEffect, useMemo, useState } from "react";
 import PlanPreview from "../components/PlanPreview.jsx";
 import { buildPlan } from "../lib/buildPlan.js";
+
+// Merge AI output into the rule-built plan
+function mergeAiIntoPlan(basePlan, ai) {
+  if (!basePlan) return basePlan;
+  const next = structuredClone(basePlan);
+
+  // 1) Trip blurb
+  if (ai?.trip_blurb) next.ai_blurb = String(ai.trip_blurb);
+
+  // 2) Venue tips + extra to-dos
+  if (Array.isArray(ai?.venue_bag_policy_tips) && ai.venue_bag_policy_tips.length) {
+    next.ai_venue_tips = Array.from(new Set([...(next.ai_venue_tips || []), ...ai.venue_bag_policy_tips]));
+  }
+  if (Array.isArray(ai?.extra_to_dos) && ai.extra_to_dos.length) {
+    next.ai_extra_todos = Array.from(new Set([...(next.ai_extra_todos || []), ...ai.extra_to_dos]));
+  }
+
+  // 3) Packing additions → put into combined list (dedup)
+  if (Array.isArray(ai?.packing_additions) && ai.packing_additions.length) {
+    next.packing = next.packing || { byPerson: {}, combined: [] };
+    const combined = new Set(next.packing.combined || []);
+    ai.packing_additions.forEach((it) => { if (it && typeof it === "string") combined.add(it); });
+    next.packing.combined = Array.from(combined);
+  }
+
+  // 4) Overpack additions
+  next.overpack = next.overpack || { skip: [], lastMinute: [], housePrep: [] };
+  const m = ai?.overpack_additions || {};
+  if (Array.isArray(m.skip) && m.skip.length) {
+    next.overpack.skip = Array.from(new Set([...(next.overpack.skip || []), ...m.skip]));
+  }
+  if (Array.isArray(m.lastMinute) && m.lastMinute.length) {
+    next.overpack.lastMinute = Array.from(new Set([...(next.overpack.lastMinute || []), ...m.lastMinute]));
+  }
+  if (Array.isArray(m.housePrep) && m.housePrep.length) {
+    next.overpack.housePrep = Array.from(new Set([...(next.overpack.housePrep || []), ...m.housePrep]));
+  }
+
+  // 5) Timeline additions (merge by day, dedup tasks, keep canonical order)
+  const CANON = ["T-14", "T-7", "T-3", "T-1", "Day of"];
+  const ensureArray = (x) => (Array.isArray(x) ? x : []);
+  const timeline = ensureArray(next.timeline).map((e) => ({
+    day: String(e?.day ?? e?.when ?? "").trim() || "",
+    tasks: ensureArray(e?.tasks),
+  })).filter(e => e.day);
+
+  const map = new Map();
+  // seed
+  for (const entry of timeline) {
+    const set = new Set(entry.tasks.filter(Boolean).map(String));
+    map.set(entry.day, set);
+  }
+  // ai adds
+  for (const add of ensureArray(ai?.timeline_additions)) {
+    const day = String(add?.day || "").trim();
+    if (!day) continue;
+    if (!map.has(day)) map.set(day, new Set());
+    const set = map.get(day);
+    ensureArray(add?.tasks).forEach(t => { if (t) set.add(String(t)); });
+  }
+  // rebuild sorted
+  const known = CANON.filter(d => map.has(d)).map(d => ({ day: d, tasks: Array.from(map.get(d)) }));
+  const extra = Array.from(map.keys())
+    .filter(d => !CANON.includes(d))
+    .sort()
+    .map(d => ({ day: d, tasks: Array.from(map.get(d)) }));
+  next.timeline = [...known, ...extra];
+
+  return next;
+}
 
 const ACTIVITY_OPTIONS = [
   { key: "lots_of_walking", label: "Lots of walking" },
@@ -26,6 +97,11 @@ export default function Home() {
   const [errorWx, setErrorWx] = useState("");
   const [destSuggestions, setDestSuggestions] = useState([]);
 
+  // --- HOTEL AUTOSUGGEST STATE (NEW) ---
+  const [hotelQuery, setHotelQuery] = useState("");
+  const [hotelOptions, setHotelOptions] = useState([]); // [{name, city}]
+  const [hotelDetectedCity, setHotelDetectedCity] = useState("");
+
   const {
     register,
     control,
@@ -36,7 +112,7 @@ export default function Home() {
   } = useForm({
     defaultValues: {
       mode: "fly",
-      trip_type: "personal", // updated default
+      trip_type: "personal",
       destination: "",
       start_date: "",
       end_date: "",
@@ -48,23 +124,46 @@ export default function Home() {
       ],
       context_flags: { traveling_solo: false, single_parent: false },
       activities: [],
-      accessibility: { mobility: false, sensory: false, medical: false, dietary: false, notes: "" },
+      accessibility: {
+        mobility: false,
+        sensory: false,
+        medical: false,
+        dietary: false,
+        notes: "",
+      },
       logistics: {
         fly: { departure_airport: "", airline: "", flight_time_local: "" },
         drive: { start_location: "", estimated_hours: "" },
         day_trip: { transport: "car" },
+        hotel: { name: "", city: "" }, // NEW
       },
-      venue_input: { name: "", city: "", type_hint: "", activities: [], known_venue_id: "" },
+      venue_input: {
+        name: "",
+        city: "",
+        type_hint: "",
+        activities: [],
+        known_venue_id: "",
+      },
     },
   });
 
-  const { fields, append, remove } = useFieldArray({ control, name: "travelers" });
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "travelers",
+  });
 
   const mode = watch("mode");
   const start = watch("start_date");
   const end = watch("end_date");
   const destination = watch("destination");
+  const accommodation = watch("accommodation"); // NEW
   const endMin = start || "";
+
+  // Small helper (NEW)
+  function cityFromDestination(dest) {
+    const t = (dest || "").split(",")[0]?.trim();
+    return t || "";
+  }
 
   // Keep Day Trip to single date (mirror start->end)
   useMemo(() => {
@@ -74,28 +173,80 @@ export default function Home() {
   // ---- Destination autosuggest (Open-Meteo geocoding) ----
   useEffect(() => {
     const q = (destination || "").trim();
-    if (q.length < 3) { setDestSuggestions([]); return; }
+    if (q.length < 3) {
+      setDestSuggestions([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const run = async () => {
+      try {
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+          q
+        )}&count=5&language=en&format=json`;
+        const res = await fetch(url, {
+          signal: ctrl.signal,
+          headers: { "Cache-Control": "no-store" },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = Array.isArray(data?.results)
+          ? data.results.map((p) => {
+              const bits = [];
+              if (p.name) bits.push(p.name);
+              if (p.admin1 && p.country_code === "US") bits.push(p.admin1);
+              if (p.country) bits.push(p.country);
+              return bits.join(", ");
+            })
+          : [];
+        setDestSuggestions(Array.from(new Set(items)).slice(0, 5));
+      } catch {
+        /* ignore */
+      }
+    };
+    const t = setTimeout(run, 250); // debounce 250ms
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [destination]);
+
+  // ---- Hotel name autosuggest (calls /api/hotels) (NEW) ----
+  useEffect(() => {
+    const q = (hotelQuery || "").trim();
+    const city =
+      hotelDetectedCity ||
+      watch("logistics.hotel.city") ||
+      cityFromDestination(destination);
+
+    if (accommodation !== "hotel" || !city || q.length < 2) {
+      setHotelOptions([]);
+      return;
+    }
 
     const ctrl = new AbortController();
     const run = async () => {
       try {
-        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`;
-        const res = await fetch(url, { signal: ctrl.signal, headers: { "Cache-Control": "no-store" } });
+        const res = await fetch(`/api/hotels?cb=${Date.now()}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: ctrl.signal,
+          body: JSON.stringify({ city, q }),
+        });
         if (!res.ok) return;
         const data = await res.json();
-        const items = Array.isArray(data?.results) ? data.results.map(p => {
-          const bits = [];
-          if (p.name) bits.push(p.name);
-          if (p.admin1 && p.country_code === "US") bits.push(p.admin1);
-          if (p.country) bits.push(p.country);
-          return bits.join(", ");
-        }) : [];
-        setDestSuggestions(Array.from(new Set(items)).slice(0, 5));
-      } catch {}
+        const items = Array.isArray(data?.hotels) ? data.hotels : [];
+        setHotelOptions(items.slice(0, 10));
+      } catch {
+        /* ignore */
+      }
     };
-    const t = setTimeout(run, 250); // debounce 250ms
-    return () => { clearTimeout(t); ctrl.abort(); };
-  }, [destination]);
+
+    const t = setTimeout(run, 250);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [accommodation, hotelQuery, hotelDetectedCity, destination, watch]);
 
   const onSubmit = async (values) => {
     setErrorWx("");
@@ -104,18 +255,28 @@ export default function Home() {
     // Build trip_input
     const cleanedTravelers = (values.travelers || [])
       .filter((t) => t.name?.trim())
-      .map((t) => ({ name: t.name.trim(), age: Number(t.age || 0), type: t.type === "adult" ? "adult" : "child" }));
+      .map((t) => ({
+        name: t.name.trim(),
+        age: Number(t.age || 0),
+        type: t.type === "adult" ? "adult" : "child",
+      }));
 
     const activities = values.activities || [];
-    const hasVenueActivity = ["sports_event", "concert_show", "theme_park"].some(a => activities.includes(a));
+    const hasVenueActivity = ["sports_event", "concert_show", "theme_park"].some(
+      (a) => activities.includes(a)
+    );
 
-    const venue_input = hasVenueActivity ? {
-      name: values.venue_input.name?.trim() || undefined,
-      city: values.venue_input.city?.trim() || undefined,
-      type_hint: values.venue_input.type_hint || undefined,
-      activities: activities.filter((a) => ["sports_event", "concert_show", "theme_park"].includes(a)),
-      known_venue_id: values.venue_input.known_venue_id?.trim() || undefined,
-    } : undefined;
+    const venue_input = hasVenueActivity
+      ? {
+          name: values.venue_input.name?.trim() || undefined,
+          city: values.venue_input.city?.trim() || undefined,
+          type_hint: values.venue_input.type_hint || undefined,
+          activities: activities.filter((a) =>
+            ["sports_event", "concert_show", "theme_park"].includes(a)
+          ),
+          known_venue_id: values.venue_input.known_venue_id?.trim() || undefined,
+        }
+      : undefined;
 
     const trip_input = {
       mode: values.mode,
@@ -132,8 +293,35 @@ export default function Home() {
       logistics: {
         ...(values.mode === "fly" ? { fly: values.logistics.fly } : {}),
         ...(values.mode === "drive" ? { drive: values.logistics.drive } : {}),
-        ...(values.mode === "day_trip" ? { day_trip: values.logistics.day_trip } : {}),
+        ...(values.mode === "day_trip"
+          ? { day_trip: values.logistics.day_trip }
+          : {}),
+        ...(values.accommodation === "hotel"
+          ? {
+              hotel: {
+                name: values.logistics?.hotel?.name || hotelQuery,
+                city:
+                  values.logistics?.hotel?.city ||
+                  hotelDetectedCity ||
+                  cityFromDestination(values.destination),
+              },
+            }
+          : {}),
       },
+      ...(values.accommodation === "hotel"
+        ? {
+            hotel_input: {
+              name: (values.logistics?.hotel?.name || hotelQuery || "").trim(),
+              city_hint:
+                (
+                  values.logistics?.hotel?.city ||
+                  hotelDetectedCity ||
+                  cityFromDestination(values.destination) ||
+                  ""
+                ).trim(),
+            },
+          }
+        : {}),
       ...(venue_input ? { venue_input } : {}),
     };
 
@@ -153,7 +341,9 @@ export default function Home() {
       });
 
       const ct = res.headers.get("content-type") || "";
-      const data = ct.includes("application/json") ? await res.json() : { error_html: await res.text() };
+      const data = ct.includes("application/json")
+        ? await res.json()
+        : { error_html: await res.text() };
 
       if (!res.ok) throw new Error(data?.error || "Weather error");
 
@@ -163,11 +353,16 @@ export default function Home() {
         wet_days_pct: data?.summary?.wet_days_pct ?? null,
         notes: data?.summary?.notes ?? "",
         daily: Array.isArray(data?.daily) ? data.daily : [],
-        matched_location: typeof data?.matched_location === "string" ? data.matched_location : undefined,
+        matched_location:
+          typeof data?.matched_location === "string"
+            ? data.matched_location
+            : undefined,
       };
     } catch (e) {
       console.error("Weather fetch failed:", e);
-      setErrorWx("Could not fetch weather. Please check destination & dates, then try again.");
+      setErrorWx(
+        "Could not fetch weather. Please check destination & dates, then try again."
+      );
     } finally {
       setLoadingWx(false);
     }
@@ -175,7 +370,13 @@ export default function Home() {
     const payload = {
       trip_input: { ...trip_input, ...(weather_summary ? { weather_summary } : {}) },
       constraints: {
-        packing_groups_required: ["carry_on", "checked_bag", "day_bag", "car_backseat", "car_trunk"],
+        packing_groups_required: [
+          "carry_on",
+          "checked_bag",
+          "day_bag",
+          "car_backseat",
+          "car_trunk",
+        ],
         timebands_required: ["T-14", "T-7", "T-3", "T-1", "day_of"],
         stadium_or_venue_policy_expected: true,
         limit_items: true,
@@ -196,25 +397,52 @@ export default function Home() {
         body: JSON.stringify(payload),
       });
       const planJson = await planRes.json();
-      const ai = planRes.ok ? planJson.ai : { error: planJson?.error || "AI unavailable" };
-      setSubmitted((prev) => ({ ...(prev || {}), ai }));
+
+      if (planRes.ok && planJson?.ai) {
+        const enhancedPlan = mergeAiIntoPlan(plan, planJson.ai);
+        setSubmitted((prev) => ({
+          ...(prev || {}),
+          ai: planJson.ai,
+          _plan: enhancedPlan,   // <— update the visible plan with AI merges
+        }));
+      } else {
+        setSubmitted((prev) => ({
+          ...(prev || {}),
+          ai: { error: planJson?.error || "AI unavailable" },
+        }));
+      }
     } catch (e) {
       console.error("Plan API error:", e);
-      setSubmitted((prev) => ({ ...(prev || {}), ai: { error: "AI unavailable" } }));
+      setSubmitted((prev) => ({
+        ...(prev || {}),
+        ai: { error: "AI unavailable" },
+      }));
     }
-  };
+  };//
 
   // Simple styles (mobile-friendly field wrapper)
-  const card  = { border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 16 };
+  const card = {
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  };
   const label = { display: "block", fontWeight: 600, marginBottom: 6 };
-  const row   = { display: "flex", gap: 12, flexWrap: "wrap" };
-  const field = { flex: "1 1 260px", minWidth: 240 }; // NEW: prevents overlap on mobile
-  const input = { padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 8, width: "100%" };
+  const row = { display: "flex", gap: 12, flexWrap: "wrap" };
+  const field = { flex: "1 1 260px", minWidth: 240 };
+  const input = {
+    padding: "8px 10px",
+    border: "1px solid #d1d5db",
+    borderRadius: 8,
+    width: "100%",
+  };
 
   return (
     <main style={{ padding: 20, maxWidth: 980, margin: "0 auto", fontFamily: "system-ui, Arial" }}>
       <h1 style={{ marginBottom: 8 }}>The Fulfilled Trip Planner - Beta</h1>
-      <p style={{ marginBottom: 16 }}>Fill this out and submit to see your plan! We are in testing mode and welcome feedback!</p>
+      <p style={{ marginBottom: 16 }}>
+        Fill this out and submit to see your plan! We are in testing mode and welcome feedback!
+      </p>
 
       <form onSubmit={handleSubmit(onSubmit)}>
         {/* Travel Mode */}
@@ -232,7 +460,7 @@ export default function Home() {
                   borderRadius: 10,
                   padding: "8px 12px",
                   cursor: "pointer",
-                  whiteSpace: "nowrap" // keep input + label together
+                  whiteSpace: "nowrap",
                 }}
                 title={m === "fly" ? "Fly ✈️" : m === "drive" ? "Drive 🚗" : "Day Trip 📅"}
               >
@@ -266,15 +494,21 @@ export default function Home() {
                 style={input}
               />
               <datalist id="dest-options">
-                {destSuggestions.map((s, i) => <option key={i} value={s} />)}
+                {destSuggestions.map((s, i) => (
+                  <option key={i} value={s} />
+                ))}
               </datalist>
-              {errors.destination && <div style={{ color: "crimson" }}>Destination is required.</div>}
+              {errors.destination && (
+                <div style={{ color: "crimson" }}>Destination is required.</div>
+              )}
             </div>
 
             <div style={field}>
               <label style={label}>Start Date</label>
               <input type="date" {...register("start_date", { required: true })} style={input} />
-              {errors.start_date && <div style={{ color: "crimson" }}>Start date is required.</div>}
+              {errors.start_date && (
+                <div style={{ color: "crimson" }}>Start date is required.</div>
+              )}
             </div>
 
             <div style={field}>
@@ -286,7 +520,9 @@ export default function Home() {
                 disabled={mode === "day_trip"}
                 min={endMin}
               />
-              {mode !== "day_trip" && errors.end_date && <div style={{ color: "crimson" }}>End date is required.</div>}
+              {mode !== "day_trip" && errors.end_date && (
+                <div style={{ color: "crimson" }}>End date is required.</div>
+              )}
               {mode !== "day_trip" && start && end && end < start && (
                 <div style={{ color: "crimson" }}>End date can’t be before start date.</div>
               )}
@@ -333,11 +569,21 @@ export default function Home() {
             <div key={fieldItem.id} style={{ ...row, marginTop: 10, alignItems: "flex-end" }}>
               <div style={field}>
                 <label style={label}>Name</label>
-                <input placeholder="Name" {...register(`travelers.${idx}.name`, { required: false })} style={input} />
+                <input
+                  placeholder="Name"
+                  {...register(`travelers.${idx}.name`, { required: false })}
+                  style={input}
+                />
               </div>
               <div style={field}>
                 <label style={label}>Age</label>
-                <input type="number" min="0" placeholder="Age" {...register(`travelers.${idx}.age`)} style={input} />
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Age"
+                  {...register(`travelers.${idx}.age`)}
+                  style={input}
+                />
               </div>
               <div style={field}>
                 <label style={label}>Type</label>
@@ -346,13 +592,21 @@ export default function Home() {
                   <option value="child">Child</option>
                 </select>
               </div>
-              <button type="button" onClick={() => remove(idx)} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}>
+              <button
+                type="button"
+                onClick={() => remove(idx)}
+                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}
+              >
                 Remove
               </button>
             </div>
           ))}
 
-          <button type="button" onClick={() => append({ name: "", age: "", type: "adult" })} style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}>
+          <button
+            type="button"
+            onClick={() => append({ name: "", age: "", type: "adult" })}
+            style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}
+          >
             + Add Traveler
           </button>
         </section>
@@ -365,15 +619,27 @@ export default function Home() {
             <div style={row}>
               <div style={field}>
                 <label style={label}>Departure Airport</label>
-                <input placeholder="e.g., MCO" {...register("logistics.fly.departure_airport", { required: true })} style={input} />
+                <input
+                  placeholder="e.g., MCO"
+                  {...register("logistics.fly.departure_airport", { required: true })}
+                  style={input}
+                />
               </div>
               <div style={field}>
                 <label style={label}>Airline</label>
-                <input placeholder="e.g., JetBlue" {...register("logistics.fly.airline", { required: true })} style={input} />
+                <input
+                  placeholder="e.g., JetBlue"
+                  {...register("logistics.fly.airline", { required: true })}
+                  style={input}
+                />
               </div>
               <div style={field}>
                 <label style={label}>Flight Time (local)</label>
-                <input type="time" {...register("logistics.fly.flight_time_local", { required: true })} style={input} />
+                <input
+                  type="time"
+                  {...register("logistics.fly.flight_time_local", { required: true })}
+                  style={input}
+                />
               </div>
             </div>
           )}
@@ -382,11 +648,22 @@ export default function Home() {
             <div style={row}>
               <div style={field}>
                 <label style={label}>Starting Location</label>
-                <input placeholder="City, ST" {...register("logistics.drive.start_location", { required: true })} style={input} />
+                <input
+                  placeholder="City, ST"
+                  {...register("logistics.drive.start_location", { required: true })}
+                  style={input}
+                />
               </div>
               <div style={field}>
                 <label style={label}>Estimated hours to final stop</label>
-                <input type="number" min="0" step="0.5" placeholder="e.g., 6" {...register("logistics.drive.estimated_hours", { required: true })} style={input} />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  placeholder="e.g., 6"
+                  {...register("logistics.drive.estimated_hours", { required: true })}
+                  style={input}
+                />
               </div>
             </div>
           )}
@@ -404,6 +681,56 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          {/* Hotel (only if Accommodation is Hotel) (NEW) */}
+          {accommodation === "hotel" && (
+            <div style={{ ...row, marginTop: 12 }}>
+              <div style={field}>
+                <label style={label}>Hotel Name</label>
+                <input
+                  list="hotel-options"
+                  placeholder="Start typing your hotel…"
+                  value={hotelQuery}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setHotelQuery(v);
+                    setValue("logistics.hotel.name", v);
+                    // Try to match a suggestion and auto-fill city
+                    const match = hotelOptions.find(
+                      (h) => (h?.name || "").toLowerCase() === v.toLowerCase()
+                    );
+                    if (match?.city) {
+                      setHotelDetectedCity(match.city);
+                      setValue("logistics.hotel.city", match.city);
+                    }
+                  }}
+                  style={input}
+                />
+                <datalist id="hotel-options">
+                  {hotelOptions.map((h, i) => (
+                    <option key={i} value={h.name} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div style={field}>
+                <label style={label}>Hotel City (auto)</label>
+                <input
+                  placeholder="City"
+                  value={
+                    hotelDetectedCity ||
+                    watch("logistics.hotel.city") ||
+                    cityFromDestination(destination)
+                  }
+                  onChange={(e) => {
+                    setHotelDetectedCity(e.target.value);
+                    setValue("logistics.hotel.city", e.target.value);
+                  }}
+                  style={input}
+                />
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Activities */}
@@ -411,7 +738,17 @@ export default function Home() {
           <div style={{ marginBottom: 10, fontWeight: 700 }}>Activities (check all that apply)</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 8 }}>
             {ACTIVITY_OPTIONS.map((opt) => (
-              <label key={opt.key} style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #eee", borderRadius: 8, padding: "6px 10px" }}>
+              <label
+                key={opt.key}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  border: "1px solid #eee",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                }}
+              >
                 <input type="checkbox" value={opt.key} {...register("activities")} />
                 {opt.label}
               </label>
@@ -420,17 +757,29 @@ export default function Home() {
         </section>
 
         {/* Venue (only if relevant) */}
-        {(watch("activities") || []).some((a) => ["sports_event", "concert_show", "theme_park"].includes(a)) && (
+        {(watch("activities") || []).some((a) =>
+          ["sports_event", "concert_show", "theme_park"].includes(a)
+        ) && (
           <section style={card}>
-            <div style={{ marginBottom: 10, fontWeight: 700 }}>Venue Details (optional, helps with bag policy)</div>
+            <div style={{ marginBottom: 10, fontWeight: 700 }}>
+              Venue Details (optional, helps with bag policy)
+            </div>
             <div style={row}>
               <div style={field}>
                 <label style={label}>Venue Name</label>
-                <input placeholder="e.g., Fenway Park" {...register("venue_input.name")} style={input} />
+                <input
+                  placeholder="e.g., Fenway Park"
+                  {...register("venue_input.name")}
+                  style={input}
+                />
               </div>
               <div style={field}>
                 <label style={label}>Venue City</label>
-                <input placeholder="e.g., Boston" {...register("venue_input.city")} style={input} />
+                <input
+                  placeholder="e.g., Boston"
+                  {...register("venue_input.city")}
+                  style={input}
+                />
               </div>
               <div style={field}>
                 <label style={label}>Type Hint</label>
@@ -447,7 +796,11 @@ export default function Home() {
 
         {/* Accessibility */}
         <section style={card}>
-          <button type="button" onClick={() => setShowAccessibility((s) => !s)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ddd", marginBottom: 10 }}>
+          <button
+            type="button"
+            onClick={() => setShowAccessibility((s) => !s)}
+            style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ddd", marginBottom: 10 }}
+          >
             {showAccessibility ? "−" : "+"} Accessibility & Special Considerations
           </button>
 
@@ -469,7 +822,12 @@ export default function Home() {
               </div>
               <div style={{ marginTop: 10 }}>
                 <label style={label}>Notes</label>
-                <textarea rows={3} placeholder="Any details you'd like us to account for…" {...register("accessibility.notes")} style={{ ...input, height: 90 }} />
+                <textarea
+                  rows={3}
+                  placeholder="Any details you'd like us to account for…"
+                  {...register("accessibility.notes")}
+                  style={{ ...input, height: 90 }}
+                />
               </div>
             </>
           )}
@@ -503,6 +861,7 @@ export default function Home() {
       {submitted?._plan && (
         <PlanPreview
           plan={submitted._plan}
+          ai={submitted.ai}          // <- passes AI to the preview
           loadingAi={submitted?.ai?.status === "loading"}
         />
       )}
@@ -511,7 +870,16 @@ export default function Home() {
       {process.env.NEXT_PUBLIC_SHOW_DEBUG === "1" && submitted && (
         <section style={{ ...card, marginTop: 16 }}>
           <div style={{ marginBottom: 8, fontWeight: 700 }}>Preview Payload</div>
-          <pre style={{ whiteSpace: "pre-wrap", overflowX: "auto", background: "#0b1020", color: "#e5f0ff", padding: 12, borderRadius: 10 }}>
+          <pre
+            style={{
+              whiteSpace: "pre-wrap",
+              overflowX: "auto",
+              background: "#0b1020",
+              color: "#e5f0ff",
+              padding: 12,
+              borderRadius: 10,
+            }}
+          >
             {JSON.stringify(submitted, null, 2)}
           </pre>
         </section>
