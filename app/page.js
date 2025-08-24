@@ -1,7 +1,7 @@
 "use client";
 
 import { useForm, useFieldArray } from "react-hook-form";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PlanPreview from "../components/PlanPreview.jsx";
 import { buildPlan } from "../lib/buildPlan.js";
 
@@ -19,42 +19,12 @@ const ACTIVITY_OPTIONS = [
   { key: "theme_park", label: "Theme Park 🎢" },
 ];
 
-// Canonical order for timeline merge (same as buildPlan)
-const CANON_ORDER = ["T-14", "T-7", "T-3", "T-1", "Day of"];
-function mergeTimelines(base = [], extra = []) {
-  const map = new Map();
-  const add = (e) => {
-    const day = String(e?.day ?? e?.when ?? "").trim();
-    if (!day) return;
-    const tasks = Array.isArray(e?.tasks) ? e.tasks.map(String).filter(Boolean)
-      : [String(e?.tasks || "")].filter(Boolean);
-    if (!map.has(day)) map.set(day, new Set());
-    const set = map.get(day);
-    tasks.forEach(t => set.add(t));
-  };
-  base.forEach(add);
-  extra.forEach(add);
-
-  const known = CANON_ORDER
-    .filter(d => map.has(d))
-    .map(d => ({ day: d, tasks: Array.from(map.get(d)) }));
-  const unknown = Array.from(map.keys())
-    .filter(d => !CANON_ORDER.includes(d))
-    .sort()
-    .map(d => ({ day: d, tasks: Array.from(map.get(d)) }));
-  return [...known, ...unknown];
-}
-
 export default function Home() {
   const [submitted, setSubmitted] = useState(null);
   const [showAccessibility, setShowAccessibility] = useState(false);
   const [loadingWx, setLoadingWx] = useState(false);
   const [errorWx, setErrorWx] = useState("");
-
-  // destination autocomplete state
-  const [destQuery, setDestQuery] = useState("");
-  const [destOpts, setDestOpts] = useState([]);
-  const destTimer = useRef(null);
+  const [destSuggestions, setDestSuggestions] = useState([]);
 
   const {
     register,
@@ -66,7 +36,7 @@ export default function Home() {
   } = useForm({
     defaultValues: {
       mode: "fly",
-      trip_type: "city",
+      trip_type: "personal", // updated default
       destination: "",
       start_date: "",
       end_date: "",
@@ -93,6 +63,7 @@ export default function Home() {
   const mode = watch("mode");
   const start = watch("start_date");
   const end = watch("end_date");
+  const destination = watch("destination");
   const endMin = start || "";
 
   // Keep Day Trip to single date (mirror start->end)
@@ -100,29 +71,31 @@ export default function Home() {
     if (mode === "day_trip" && start && start !== end) setValue("end_date", start);
   }, [mode, start, end, setValue]);
 
-  // ---- Destination autocomplete (debounced) ----
-  const destination = watch("destination");
+  // ---- Destination autosuggest (Open-Meteo geocoding) ----
   useEffect(() => {
-    setDestQuery(destination || "");
-  }, [destination]);
+    const q = (destination || "").trim();
+    if (q.length < 3) { setDestSuggestions([]); return; }
 
-  useEffect(() => {
-    if (destTimer.current) clearTimeout(destTimer.current);
-    if (!destQuery || destQuery.length < 2) {
-      setDestOpts([]);
-      return;
-    }
-    destTimer.current = setTimeout(async () => {
+    const ctrl = new AbortController();
+    const run = async () => {
       try {
-        const r = await fetch(`/api/places?q=${encodeURIComponent(destQuery)}`, { cache: "no-store" });
-        const j = await r.json();
-        setDestOpts(Array.isArray(j?.results) ? j.results : []);
-      } catch {
-        setDestOpts([]);
-      }
-    }, 250);
-    return () => destTimer.current && clearTimeout(destTimer.current);
-  }, [destQuery]);
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`;
+        const res = await fetch(url, { signal: ctrl.signal, headers: { "Cache-Control": "no-store" } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = Array.isArray(data?.results) ? data.results.map(p => {
+          const bits = [];
+          if (p.name) bits.push(p.name);
+          if (p.admin1 && p.country_code === "US") bits.push(p.admin1);
+          if (p.country) bits.push(p.country);
+          return bits.join(", ");
+        }) : [];
+        setDestSuggestions(Array.from(new Set(items)).slice(0, 5));
+      } catch {}
+    };
+    const t = setTimeout(run, 250); // debounce 250ms
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [destination]);
 
   const onSubmit = async (values) => {
     setErrorWx("");
@@ -130,31 +103,24 @@ export default function Home() {
 
     // Build trip_input
     const cleanedTravelers = (values.travelers || [])
-      .filter(t => t.name?.trim())
-      .map(t => ({
-        name: t.name.trim(),
-        age: Number(t.age || 0),
-        type: t.type === "adult" ? "adult" : "child",
-      }));
+      .filter((t) => t.name?.trim())
+      .map((t) => ({ name: t.name.trim(), age: Number(t.age || 0), type: t.type === "adult" ? "adult" : "child" }));
 
     const activities = values.activities || [];
-    const hasVenueActivity =
-      activities.includes("sports_event") ||
-      activities.includes("concert_show") ||
-      activities.includes("theme_park");
+    const hasVenueActivity = ["sports_event", "concert_show", "theme_park"].some(a => activities.includes(a));
 
     const venue_input = hasVenueActivity ? {
       name: values.venue_input.name?.trim() || undefined,
       city: values.venue_input.city?.trim() || undefined,
       type_hint: values.venue_input.type_hint || undefined,
-      activities: activities.filter(a => ["sports_event","concert_show","theme_park"].includes(a)),
+      activities: activities.filter((a) => ["sports_event", "concert_show", "theme_park"].includes(a)),
       known_venue_id: values.venue_input.known_venue_id?.trim() || undefined,
     } : undefined;
 
     const trip_input = {
       mode: values.mode,
       trip_type: values.trip_type,
-      destination: (values.destination || "").trim(),
+      destination: values.destination.trim(),
       start_date: values.start_date,
       ...(values.mode !== "day_trip" ? { end_date: values.end_date } : {}),
       accommodation: values.accommodation || "",
@@ -171,33 +137,24 @@ export default function Home() {
       ...(venue_input ? { venue_input } : {}),
     };
 
-    // ---- Weather fetch (no-store + cache-buster + single retry) ----
-    const wxBody = {
-      trip_input: {
-        destination: trip_input.destination,
-        start_date: trip_input.start_date,
-        end_date: trip_input.end_date || trip_input.start_date,
-      },
-    };
-
+    // Fetch weather (POST with cache-buster)
     let weather_summary = null;
     try {
-      const doFetch = () =>
-        fetch(`/api/weather?cb=${Date.now()}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-          body: JSON.stringify(wxBody),
-        });
-
-      let res = await doFetch();
-      if (!res.ok) {
-        // quick retry once if first call failed
-        res = await doFetch();
-      }
+      const res = await fetch(`/api/weather?cb=${Date.now()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trip_input: {
+            destination: trip_input.destination,
+            start_date: trip_input.start_date,
+            end_date: trip_input.end_date || trip_input.start_date,
+          },
+        }),
+      });
 
       const ct = res.headers.get("content-type") || "";
       const data = ct.includes("application/json") ? await res.json() : { error_html: await res.text() };
+
       if (!res.ok) throw new Error(data?.error || "Weather error");
 
       weather_summary = {
@@ -206,12 +163,7 @@ export default function Home() {
         wet_days_pct: data?.summary?.wet_days_pct ?? null,
         notes: data?.summary?.notes ?? "",
         daily: Array.isArray(data?.daily) ? data.daily : [],
-        matched_location:
-          typeof data?.matched_location === "string"
-            ? data.matched_location
-            : (data?.matched_location?.name
-                ? `${data.matched_location.name}${data?.matched_location?.country ? ", " + data.matched_location.country : ""}`
-                : undefined),
+        matched_location: typeof data?.matched_location === "string" ? data.matched_location : undefined,
       };
     } catch (e) {
       console.error("Weather fetch failed:", e);
@@ -232,7 +184,7 @@ export default function Home() {
     };
 
     // Build rule-based plan immediately
-    let plan = buildPlan(payload);
+    const plan = buildPlan(payload);
 
     // Show plan right away; fetch AI tips, then merge
     setSubmitted({ ...payload, _plan: plan, ai: { status: "loading" } });
@@ -241,36 +193,23 @@ export default function Home() {
       const planRes = await fetch(`/api/plan?cb=${Date.now()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        cache: "no-store",
         body: JSON.stringify(payload),
       });
       const planJson = await planRes.json();
       const ai = planRes.ok ? planJson.ai : { error: planJson?.error || "AI unavailable" };
-
-      // Merge AI into plan (no dupes, keep canonical order)
-      if (!ai.error) {
-        const mergedTimeline = mergeTimelines(plan.timeline, ai.timeline || []);
-        plan = {
-          ...plan,
-          ai_blurb: ai.trip_blurb || "",
-          ai_venue_tips: Array.isArray(ai.venue_bag_policy_tips) ? ai.venue_bag_policy_tips : [],
-          ai_extra_todos: Array.isArray(ai.extra_to_dos) ? ai.extra_to_dos : [],
-          timeline: mergedTimeline,
-        };
-      }
-
-      setSubmitted(prev => ({ ...(prev || {}), _plan: plan, ai }));
+      setSubmitted((prev) => ({ ...(prev || {}), ai }));
     } catch (e) {
       console.error("Plan API error:", e);
-      setSubmitted(prev => ({ ...(prev || {}), ai: { error: "AI unavailable" } }));
+      setSubmitted((prev) => ({ ...(prev || {}), ai: { error: "AI unavailable" } }));
     }
   };
 
-  // Simple styles
-  const card = { border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 16 };
+  // Simple styles (mobile-friendly field wrapper)
+  const card  = { border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 16 };
   const label = { display: "block", fontWeight: 600, marginBottom: 6 };
-  const row = { display: "flex", gap: 12, flexWrap: "wrap" };
-  const input = { padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 8, width: "100%", maxWidth: 320 };
+  const row   = { display: "flex", gap: 12, flexWrap: "wrap" };
+  const field = { flex: "1 1 260px", minWidth: 240 }; // NEW: prevents overlap on mobile
+  const input = { padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 8, width: "100%" };
 
   return (
     <main style={{ padding: 20, maxWidth: 980, margin: "0 auto", fontFamily: "system-ui, Arial" }}>
@@ -285,7 +224,16 @@ export default function Home() {
             {["fly", "drive", "day_trip"].map((m) => (
               <label
                 key={m}
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid #ddd", borderRadius: 10, padding: "8px 12px", cursor: "pointer" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  border: "1px solid #ddd",
+                  borderRadius: 10,
+                  padding: "8px 12px",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap" // keep input + label together
+                }}
                 title={m === "fly" ? "Fly ✈️" : m === "drive" ? "Drive 🚗" : "Day Trip 📅"}
               >
                 <input type="radio" value={m} {...register("mode", { required: true })} />
@@ -300,40 +248,36 @@ export default function Home() {
         <section style={card}>
           <div style={{ marginBottom: 10, fontWeight: 700 }}>Trip Basics</div>
           <div style={row}>
-            <div>
+            <div style={field}>
               <label style={label}>Trip Type</label>
               <select {...register("trip_type")} style={input}>
-                <option value="city">City</option>
-                <option value="beach">Beach</option>
-                <option value="mountains">Mountains</option>
-                <option value="lake">Lake</option>
-                <option value="international">International</option>
-                <option value="theme_park">Theme Park</option>
-                <option value="other">Other</option>
+                <option value="personal">Personal</option>
+                <option value="work">Work</option>
+                <option value="both">Both</option>
               </select>
             </div>
-            <div>
+
+            <div style={field}>
               <label style={label}>Destination</label>
               <input
-                list="destinations"
                 placeholder="City, State/Country"
+                list="dest-options"
                 {...register("destination", { required: true })}
-                onChange={(e) => setDestQuery(e.target.value)}
                 style={input}
               />
-              <datalist id="destinations">
-                {destOpts.map((o, i) => (
-                  <option key={i} value={o.label}>{o.full}</option>
-                ))}
+              <datalist id="dest-options">
+                {destSuggestions.map((s, i) => <option key={i} value={s} />)}
               </datalist>
               {errors.destination && <div style={{ color: "crimson" }}>Destination is required.</div>}
             </div>
-            <div>
+
+            <div style={field}>
               <label style={label}>Start Date</label>
               <input type="date" {...register("start_date", { required: true })} style={input} />
               {errors.start_date && <div style={{ color: "crimson" }}>Start date is required.</div>}
             </div>
-            <div>
+
+            <div style={field}>
               <label style={label}>{mode === "day_trip" ? "Date (Same Day)" : "End Date"}</label>
               <input
                 type="date"
@@ -351,7 +295,7 @@ export default function Home() {
 
           {/* Accommodation + Getting Around */}
           <div style={{ ...row, marginTop: 10 }}>
-            <div>
+            <div style={field}>
               <label style={label}>Accommodation</label>
               <select {...register("accommodation")} style={input}>
                 <option value="">Select</option>
@@ -360,7 +304,7 @@ export default function Home() {
                 <option value="rental">Vacation Rental</option>
               </select>
             </div>
-            <div>
+            <div style={field}>
               <label style={label}>Getting Around</label>
               <select {...register("transportation")} style={input}>
                 <option value="">Select</option>
@@ -377,25 +321,25 @@ export default function Home() {
         <section style={card}>
           <div style={{ marginBottom: 10, fontWeight: 700 }}>Travelers</div>
           <div style={row}>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
               <input type="checkbox" {...register("context_flags.traveling_solo")} /> I’m traveling solo
             </label>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
               <input type="checkbox" {...register("context_flags.single_parent")} /> I’m a single parent
             </label>
           </div>
 
-          {fields.map((field, idx) => (
-            <div key={field.id} style={{ ...row, marginTop: 10, alignItems: "flex-end" }}>
-              <div>
+          {fields.map((fieldItem, idx) => (
+            <div key={fieldItem.id} style={{ ...row, marginTop: 10, alignItems: "flex-end" }}>
+              <div style={field}>
                 <label style={label}>Name</label>
                 <input placeholder="Name" {...register(`travelers.${idx}.name`, { required: false })} style={input} />
               </div>
-              <div>
+              <div style={field}>
                 <label style={label}>Age</label>
                 <input type="number" min="0" placeholder="Age" {...register(`travelers.${idx}.age`)} style={input} />
               </div>
-              <div>
+              <div style={field}>
                 <label style={label}>Type</label>
                 <select {...register(`travelers.${idx}.type`)} style={input}>
                   <option value="adult">Adult</option>
@@ -419,15 +363,15 @@ export default function Home() {
 
           {mode === "fly" && (
             <div style={row}>
-              <div>
+              <div style={field}>
                 <label style={label}>Departure Airport</label>
                 <input placeholder="e.g., MCO" {...register("logistics.fly.departure_airport", { required: true })} style={input} />
               </div>
-              <div>
+              <div style={field}>
                 <label style={label}>Airline</label>
                 <input placeholder="e.g., JetBlue" {...register("logistics.fly.airline", { required: true })} style={input} />
               </div>
-              <div>
+              <div style={field}>
                 <label style={label}>Flight Time (local)</label>
                 <input type="time" {...register("logistics.fly.flight_time_local", { required: true })} style={input} />
               </div>
@@ -436,12 +380,12 @@ export default function Home() {
 
           {mode === "drive" && (
             <div style={row}>
-              <div>
+              <div style={field}>
                 <label style={label}>Starting Location</label>
                 <input placeholder="City, ST" {...register("logistics.drive.start_location", { required: true })} style={input} />
               </div>
-              <div>
-                <label style={label}>Estimated Hours</label>
+              <div style={field}>
+                <label style={label}>Estimated hours to final stop</label>
                 <input type="number" min="0" step="0.5" placeholder="e.g., 6" {...register("logistics.drive.estimated_hours", { required: true })} style={input} />
               </div>
             </div>
@@ -449,7 +393,7 @@ export default function Home() {
 
           {mode === "day_trip" && (
             <div style={row}>
-              <div>
+              <div style={field}>
                 <label style={label}>Transport</label>
                 <select {...register("logistics.day_trip.transport")} style={input}>
                   <option value="car">Car</option>
@@ -480,15 +424,15 @@ export default function Home() {
           <section style={card}>
             <div style={{ marginBottom: 10, fontWeight: 700 }}>Venue Details (optional, helps with bag policy)</div>
             <div style={row}>
-              <div>
+              <div style={field}>
                 <label style={label}>Venue Name</label>
                 <input placeholder="e.g., Fenway Park" {...register("venue_input.name")} style={input} />
               </div>
-              <div>
+              <div style={field}>
                 <label style={label}>Venue City</label>
                 <input placeholder="e.g., Boston" {...register("venue_input.city")} style={input} />
               </div>
-              <div>
+              <div style={field}>
                 <label style={label}>Type Hint</label>
                 <select {...register("venue_input.type_hint")} style={input}>
                   <option value="">(select)</option>
@@ -510,22 +454,22 @@ export default function Home() {
           {showAccessibility && (
             <>
               <div style={row}>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
                   <input type="checkbox" {...register("accessibility.mobility")} /> Mobility
                 </label>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
                   <input type="checkbox" {...register("accessibility.sensory")} /> Sensory
                 </label>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
                   <input type="checkbox" {...register("accessibility.medical")} /> Medical
                 </label>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
                   <input type="checkbox" {...register("accessibility.dietary")} /> Dietary
                 </label>
               </div>
               <div style={{ marginTop: 10 }}>
                 <label style={label}>Notes</label>
-                <textarea rows={3} placeholder="Any details you'd like us to account for…" {...register("accessibility.notes")} style={{ ...input, maxWidth: "100%" }} />
+                <textarea rows={3} placeholder="Any details you'd like us to account for…" {...register("accessibility.notes")} style={{ ...input, height: 90 }} />
               </div>
             </>
           )}
