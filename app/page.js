@@ -1,8 +1,8 @@
 // app/page.js
 "use client";
 
-import { useForm, useFieldArray } from "react-hook-form";
-import { useEffect, useMemo, useState } from "react";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useEffect, useState } from "react";
 import PlanPreview from "../components/PlanPreview.jsx";
 import { buildPlan } from "../lib/buildPlan.js";
 
@@ -76,6 +76,13 @@ function mergeAiIntoPlan(basePlan, ai) {
   return next;
 }
 
+const TRAVEL_MODE_OPTIONS = [
+  { key: "fly", label: "Fly", title: "Flying or taking a plane" },
+  { key: "drive", label: "Drive / Road Trip", title: "Driving between stops" },
+  { key: "cruise", label: "Cruise", title: "Traveling by cruise ship" },
+  { key: "day_trip", label: "Day Trip", title: "Out-and-back same day" },
+];
+
 const ACTIVITY_OPTIONS = [
   { key: "lots_of_walking", label: "Lots of walking" },
   { key: "fancy_dinner", label: "Fancy dinner" },
@@ -87,7 +94,16 @@ const ACTIVITY_OPTIONS = [
   { key: "sports_event", label: "Sports event" },
   { key: "concert_show", label: "Concert / Show" },
   { key: "museums_tours", label: "Museums / Tours" },
+  { key: "fishing", label: "Fishing" },
+  { key: "camping", label: "Camping" },
   { key: "theme_park", label: "Theme Park 🎢" },
+];
+
+const LOADING_MESSAGES = [
+  "Fetching weather details...",
+  "Checking out the area...",
+  "Gathering handy tips...",
+  "Making all the lists...",
 ];
 
 export default function Home() {
@@ -101,6 +117,9 @@ export default function Home() {
   const [hotelQuery, setHotelQuery] = useState("");
   const [hotelOptions, setHotelOptions] = useState([]); // [{name, city}]
   const [hotelDetectedCity, setHotelDetectedCity] = useState("");
+  const [airportQuery, setAirportQuery] = useState("");
+  const [airportOptions, setAirportOptions] = useState([]);
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
 
   const {
     register,
@@ -111,7 +130,7 @@ export default function Home() {
     formState: { errors },
   } = useForm({
     defaultValues: {
-      mode: "fly",
+      modes: ["fly"],
       trip_type: "personal",
       destination: "",
       start_date: "",
@@ -135,6 +154,7 @@ export default function Home() {
         fly: { departure_airport: "", airline: "", flight_time_local: "" },
         drive: { start_location: "", estimated_hours: "" },
         day_trip: { transport: "car" },
+        cruise: { cruise_line: "", ship_name: "", embark_port: "", disembark_port: "", embark_time_local: "" },
         hotel: { name: "", city: "" }, // NEW
       },
       venue_input: {
@@ -152,12 +172,49 @@ export default function Home() {
     name: "travelers",
   });
 
-  const mode = watch("mode");
+  const modes = watch("modes") || [];
   const start = watch("start_date");
   const end = watch("end_date");
   const destination = watch("destination");
   const accommodation = watch("accommodation"); // NEW
+  const departureAirportValue = watch("logistics.fly.departure_airport");
+  const hotelCityValue = watch("logistics.hotel.city");
+  const hotelNameValue = watch("logistics.hotel.name");
+  const dayTripSelected = modes.includes("day_trip");
   const endMin = start || "";
+
+  useEffect(() => {
+    if (!modes.includes("fly")) {
+      setAirportQuery("");
+      setValue("logistics.fly.departure_airport", "");
+      return;
+    }
+    setAirportQuery(departureAirportValue || "");
+  }, [departureAirportValue, modes, setValue]);
+
+  useEffect(() => {
+    setHotelQuery(hotelNameValue || "");
+  }, [hotelNameValue]);
+
+  useEffect(() => {
+    if (hotelCityValue) {
+      setHotelDetectedCity(hotelCityValue);
+    }
+  }, [hotelCityValue]);
+
+  useEffect(() => {
+    if (!loadingWx) {
+      setLoadingMsgIndex(0);
+      return;
+    }
+    setLoadingMsgIndex(0);
+    const interval = setInterval(() => {
+      setLoadingMsgIndex((idx) => (idx + 1) % LOADING_MESSAGES.length);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [loadingWx]);
+
+  const includesMode = (key) => modes.includes(key);
 
   // Small helper (NEW)
   function cityFromDestination(dest) {
@@ -166,56 +223,96 @@ export default function Home() {
   }
 
   // Keep Day Trip to single date (mirror start->end)
-  useMemo(() => {
-    if (mode === "day_trip" && start && start !== end) setValue("end_date", start);
-  }, [mode, start, end, setValue]);
+  useEffect(() => {
+    if (dayTripSelected && start && start !== end) setValue("end_date", start);
+  }, [dayTripSelected, start, end, setValue]);
 
-  // ---- Destination autosuggest (Open-Meteo geocoding) ----
+  // ---- Destination autosuggest (Places API) ----
   useEffect(() => {
     const q = (destination || "").trim();
-    if (q.length < 3) {
+    if (q.length < 2) {
       setDestSuggestions([]);
       return;
     }
     const ctrl = new AbortController();
     const run = async () => {
       try {
-        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-          q
-        )}&count=5&language=en&format=json`;
-        const res = await fetch(url, {
+        const res = await fetch(`/api/places?q=${encodeURIComponent(q)}`, {
           signal: ctrl.signal,
           headers: { "Cache-Control": "no-store" },
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          setDestSuggestions([]);
+          return;
+        }
         const data = await res.json();
         const items = Array.isArray(data?.results)
-          ? data.results.map((p) => {
-              const bits = [];
-              if (p.name) bits.push(p.name);
-              if (p.admin1 && p.country_code === "US") bits.push(p.admin1);
-              if (p.country) bits.push(p.country);
-              return bits.join(", ");
-            })
+          ? data.results
+              .map((entry) => entry?.label || entry?.full || "")
+              .filter(Boolean)
           : [];
-        setDestSuggestions(Array.from(new Set(items)).slice(0, 5));
+        setDestSuggestions(items.slice(0, 8));
       } catch {
-        /* ignore */
+        setDestSuggestions([]);
       }
     };
-    const t = setTimeout(run, 250); // debounce 250ms
+    const t = setTimeout(run, 250);
     return () => {
       clearTimeout(t);
       ctrl.abort();
     };
   }, [destination]);
 
+  // ---- Airport lookup (local dataset) ----
+  useEffect(() => {
+    const q = (airportQuery || "").trim();
+    if (!modes.includes("fly")) {
+      setAirportOptions([]);
+      return;
+    }
+    if (q.length < 2) {
+      setAirportOptions([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const run = async () => {
+      try {
+        const res = await fetch(`/api/airports?q=${encodeURIComponent(q)}`, {
+          signal: ctrl.signal,
+          headers: { "Cache-Control": "no-store" },
+        });
+        if (!res.ok) {
+          setAirportOptions([]);
+          return;
+        }
+        const data = await res.json();
+        const items = Array.isArray(data?.airports) ? data.airports : [];
+        const seen = new Set();
+        const unique = [];
+        items.forEach((item) => {
+          const key = (item?.iata || item?.icao || item?.name || "").toLowerCase();
+          if (!key || seen.has(key)) return;
+          seen.add(key);
+          unique.push(item);
+        });
+        setAirportOptions(unique.slice(0, 12));
+      } catch {
+        setAirportOptions([]);
+      }
+    };
+    const t = setTimeout(run, 250);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [airportQuery, modes]);
+
   // ---- Hotel name autosuggest (calls /api/hotels) (NEW) ----
   useEffect(() => {
     const q = (hotelQuery || "").trim();
     const city =
       hotelDetectedCity ||
-      watch("logistics.hotel.city") ||
+      hotelCityValue ||
       cityFromDestination(destination);
 
     if (accommodation !== "hotel" || !city || q.length < 2) {
@@ -232,12 +329,23 @@ export default function Home() {
           signal: ctrl.signal,
           body: JSON.stringify({ city, q }),
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          setHotelOptions([]);
+          return;
+        }
         const data = await res.json();
         const items = Array.isArray(data?.hotels) ? data.hotels : [];
-        setHotelOptions(items.slice(0, 10));
+        const seen = new Set();
+        const unique = [];
+        items.forEach((item) => {
+          const key = (item?.name || "").toLowerCase();
+          if (!key || seen.has(key)) return;
+          seen.add(key);
+          unique.push(item);
+        });
+        setHotelOptions(unique.slice(0, 12));
       } catch {
-        /* ignore */
+        setHotelOptions([]);
       }
     };
 
@@ -246,10 +354,11 @@ export default function Home() {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [accommodation, hotelQuery, hotelDetectedCity, destination, watch]);
+  }, [accommodation, hotelQuery, hotelDetectedCity, destination, hotelCityValue]);
 
   const onSubmit = async (values) => {
     setErrorWx("");
+    setLoadingMsgIndex(0);
     setLoadingWx(true);
 
     // Build trip_input
@@ -278,12 +387,20 @@ export default function Home() {
         }
       : undefined;
 
+    const selectedModesList = Array.isArray(values.modes)
+      ? values.modes.filter(Boolean)
+      : [];
+    const selectedModes = selectedModesList.length ? selectedModesList : ["fly"];
+    const logisticsForm = values.logistics || {};
+
     const trip_input = {
-      mode: values.mode,
+      modes: selectedModes,
       trip_type: values.trip_type,
       destination: values.destination.trim(),
       start_date: values.start_date,
-      ...(values.mode !== "day_trip" ? { end_date: values.end_date } : {}),
+      end_date: selectedModes.includes("day_trip")
+        ? values.start_date
+        : values.end_date || values.start_date,
       accommodation: values.accommodation || "",
       transportation: values.transportation || "",
       travelers: cleanedTravelers,
@@ -291,17 +408,16 @@ export default function Home() {
       activities,
       accessibility: values.accessibility,
       logistics: {
-        ...(values.mode === "fly" ? { fly: values.logistics.fly } : {}),
-        ...(values.mode === "drive" ? { drive: values.logistics.drive } : {}),
-        ...(values.mode === "day_trip"
-          ? { day_trip: values.logistics.day_trip }
-          : {}),
+        ...(selectedModes.includes("fly") ? { fly: logisticsForm.fly } : {}),
+        ...(selectedModes.includes("drive") ? { drive: logisticsForm.drive } : {}),
+        ...(selectedModes.includes("cruise") ? { cruise: logisticsForm.cruise } : {}),
+        ...(selectedModes.includes("day_trip") ? { day_trip: logisticsForm.day_trip } : {}),
         ...(values.accommodation === "hotel"
           ? {
               hotel: {
-                name: values.logistics?.hotel?.name || hotelQuery,
+                name: logisticsForm?.hotel?.name || hotelQuery,
                 city:
-                  values.logistics?.hotel?.city ||
+                  logisticsForm?.hotel?.city ||
                   hotelDetectedCity ||
                   cityFromDestination(values.destination),
               },
@@ -311,10 +427,10 @@ export default function Home() {
       ...(values.accommodation === "hotel"
         ? {
             hotel_input: {
-              name: (values.logistics?.hotel?.name || hotelQuery || "").trim(),
+              name: (logisticsForm?.hotel?.name || hotelQuery || "").trim(),
               city_hint:
                 (
-                  values.logistics?.hotel?.city ||
+                  logisticsForm?.hotel?.city ||
                   hotelDetectedCity ||
                   cityFromDestination(values.destination) ||
                   ""
@@ -363,8 +479,6 @@ export default function Home() {
       setErrorWx(
         "Could not fetch weather. Please check destination & dates, then try again."
       );
-    } finally {
-      setLoadingWx(false);
     }
 
     const payload = {
@@ -384,11 +498,10 @@ export default function Home() {
       },
     };
 
-    // Build rule-based plan immediately
     const plan = buildPlan(payload);
 
-    // Show plan right away; fetch AI tips, then merge
-    setSubmitted({ ...payload, _plan: plan, ai: { status: "loading" } });
+    let enhancedPlan = plan;
+    let aiState = {};
 
     try {
       const planRes = await fetch(`/api/plan?cb=${Date.now()}`, {
@@ -399,26 +512,22 @@ export default function Home() {
       const planJson = await planRes.json();
 
       if (planRes.ok && planJson?.ai) {
-        const enhancedPlan = mergeAiIntoPlan(plan, planJson.ai);
-        setSubmitted((prev) => ({
-          ...(prev || {}),
-          ai: planJson.ai,
-          _plan: enhancedPlan,   // <— update the visible plan with AI merges
-        }));
+        aiState = planJson.ai;
+        enhancedPlan = mergeAiIntoPlan(plan, planJson.ai);
       } else {
-        setSubmitted((prev) => ({
-          ...(prev || {}),
-          ai: { error: planJson?.error || "AI unavailable" },
-        }));
+        aiState = { error: planJson?.error || "AI unavailable" };
       }
     } catch (e) {
       console.error("Plan API error:", e);
-      setSubmitted((prev) => ({
-        ...(prev || {}),
-        ai: { error: "AI unavailable" },
-      }));
+      aiState = { error: "AI unavailable" };
+    } finally {
+      setSubmitted({ ...payload, _plan: enhancedPlan, ai: aiState });
+      setLoadingWx(false);
     }
+
   };//
+
+  const currentLoadingMessage = LOADING_MESSAGES[loadingMsgIndex] || LOADING_MESSAGES[0];
 
   // Simple styles (mobile-friendly field wrapper)
   const card = {
@@ -445,31 +554,72 @@ export default function Home() {
       </p>
 
       <form onSubmit={handleSubmit(onSubmit)}>
-        {/* Travel Mode */}
+        {/* Travel Modes */}
         <section style={card}>
-          <div style={{ marginBottom: 10, fontWeight: 700 }}>Step 1: Travel Mode</div>
-          <div style={row}>
-            {["fly", "drive", "day_trip"].map((m) => (
-              <label
-                key={m}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  border: "1px solid #ddd",
-                  borderRadius: 10,
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-                title={m === "fly" ? "Fly ✈️" : m === "drive" ? "Drive 🚗" : "Day Trip 📅"}
-              >
-                <input type="radio" value={m} {...register("mode", { required: true })} />
-                {m === "fly" ? "✈️ Fly" : m === "drive" ? "🚗 Drive / Road Trip" : "📅 Day Trip"}
-              </label>
-            ))}
-          </div>
-          {errors.mode && <div style={{ color: "crimson" }}>Please choose a mode.</div>}
+          <div style={{ marginBottom: 10, fontWeight: 700 }}>Step 1: Travel Modes</div>
+          <Controller
+            control={control}
+            name="modes"
+            rules={{
+              validate: (value) =>
+                Array.isArray(value) && value.length > 0
+                  ? true
+                  : "Please choose at least one travel mode.",
+            }}
+            render={({ field }) => {
+              const value = Array.isArray(field.value) ? field.value : [];
+              const toggle = (modeKey) => {
+                if (modeKey === "day_trip") {
+                  field.onChange(value.includes("day_trip") ? [] : ["day_trip"]);
+                  return;
+                }
+                const set = new Set(value.filter(Boolean));
+                if (set.has(modeKey)) {
+                  set.delete(modeKey);
+                } else {
+                  set.add(modeKey);
+                }
+                set.delete("day_trip");
+                field.onChange(Array.from(set));
+              };
+              return (
+                <div style={row}>
+                  {TRAVEL_MODE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.key}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        border: "1px solid #ddd",
+                        borderRadius: 10,
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        opacity:
+                          opt.key !== "day_trip" && value.includes("day_trip") ? 0.6 : 1,
+                      }}
+                      title={opt.title || opt.label}
+                    >
+                      <input
+                        type="checkbox"
+                        value={opt.key}
+                        checked={value.includes(opt.key)}
+                        onChange={() => toggle(opt.key)}
+                        onBlur={field.onBlur}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              );
+            }}
+          />
+          {errors.modes && (
+            <div style={{ color: "crimson" }}>
+              {errors.modes.message || "Please choose at least one travel mode."}
+            </div>
+          )}
         </section>
 
         {/* Trip Basics */}
@@ -512,18 +662,18 @@ export default function Home() {
             </div>
 
             <div style={field}>
-              <label style={label}>{mode === "day_trip" ? "Date (Same Day)" : "End Date"}</label>
+              <label style={label}>{dayTripSelected ? "Date (Same Day)" : "End Date"}</label>
               <input
                 type="date"
-                {...register("end_date", { required: mode !== "day_trip" })}
+                {...register("end_date", { required: !dayTripSelected })}
                 style={input}
-                disabled={mode === "day_trip"}
+                disabled={dayTripSelected}
                 min={endMin}
               />
-              {mode !== "day_trip" && errors.end_date && (
+              {!dayTripSelected && errors.end_date && (
                 <div style={{ color: "crimson" }}>End date is required.</div>
               )}
-              {mode !== "day_trip" && start && end && end < start && (
+              {!dayTripSelected && start && end && end < start && (
                 <div style={{ color: "crimson" }}>End date can’t be before start date.</div>
               )}
             </div>
@@ -615,14 +765,51 @@ export default function Home() {
         <section style={card}>
           <div style={{ marginBottom: 10, fontWeight: 700 }}>Logistics</div>
 
-          {mode === "fly" && (
+          {includesMode("fly") && (
             <div style={row}>
               <div style={field}>
                 <label style={label}>Departure Airport</label>
-                <input
-                  placeholder="e.g., MCO"
-                  {...register("logistics.fly.departure_airport", { required: true })}
-                  style={input}
+                <Controller
+                  control={control}
+                  name="logistics.fly.departure_airport"
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <>
+                      <input
+                        {...field}
+                        list="airport-options"
+                        placeholder="Start typing an airport code or name"
+                        value={airportQuery}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setAirportQuery(v);
+                          field.onChange(v);
+                        }}
+                        onBlur={field.onBlur}
+                        style={input}
+                      />
+                      <datalist id="airport-options">
+                        {airportOptions.map((opt, idx) => {
+                          const locationBits = [opt?.city, opt?.state, opt?.country].filter(Boolean).join(", ");
+                          const label = [
+                            opt?.iata || opt?.icao || null,
+                            opt?.name || null,
+                            locationBits ? `(${locationBits})` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" ");
+                          const value = opt?.iata || opt?.icao || opt?.name || "";
+                          return (
+                            <option
+                              key={`airport-${opt?.iata || opt?.icao || idx}`}
+                              value={value}
+                              label={label}
+                            />
+                          );
+                        })}
+                      </datalist>
+                    </>
+                  )}
                 />
               </div>
               <div style={field}>
@@ -644,7 +831,7 @@ export default function Home() {
             </div>
           )}
 
-          {mode === "drive" && (
+          {includesMode("drive") && (
             <div style={row}>
               <div style={field}>
                 <label style={label}>Starting Location</label>
@@ -668,14 +855,66 @@ export default function Home() {
             </div>
           )}
 
-          {mode === "day_trip" && (
+          {includesMode("cruise") && (
+            <>
+              <div style={row}>
+                <div style={field}>
+                  <label style={label}>Cruise Line</label>
+                  <input
+                    placeholder="e.g., Disney Cruise Line"
+                    {...register("logistics.cruise.cruise_line", { required: true })}
+                    style={input}
+                  />
+                </div>
+                <div style={field}>
+                  <label style={label}>Ship Name</label>
+                  <input
+                    placeholder="e.g., Disney Wish"
+                    {...register("logistics.cruise.ship_name", { required: true })}
+                    style={input}
+                  />
+                </div>
+                <div style={field}>
+                  <label style={label}>Embarkation Port</label>
+                  <input
+                    placeholder="City, Country"
+                    {...register("logistics.cruise.embark_port", { required: true })}
+                    style={input}
+                  />
+                </div>
+              </div>
+              <div style={row}>
+                <div style={field}>
+                  <label style={label}>Embarkation Time (local)</label>
+                  <input
+                    type="datetime-local"
+                    {...register("logistics.cruise.embark_time_local")}
+                    style={input}
+                  />
+                </div>
+                <div style={field}>
+                  <label style={label}>Disembark Port</label>
+                  <input
+                    placeholder="Final port"
+                    {...register("logistics.cruise.disembark_port")}
+                    style={input}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {dayTripSelected && (
+
             <div style={row}>
               <div style={field}>
                 <label style={label}>Transport</label>
                 <select {...register("logistics.day_trip.transport")} style={input}>
                   <option value="car">Car</option>
                   <option value="train">Train</option>
-                  <option value="subway">Subway</option>
+                  <option value="subway">Subway/Metro</option>
+                  <option value="taxi">Taxi/Rideshare</option>
+                  <option value="walk">Walking</option>
                   <option value="other">Other</option>
                 </select>
               </div>
@@ -695,21 +934,27 @@ export default function Home() {
                     const v = e.target.value;
                     setHotelQuery(v);
                     setValue("logistics.hotel.name", v);
-                    // Try to match a suggestion and auto-fill city
                     const match = hotelOptions.find(
                       (h) => (h?.name || "").toLowerCase() === v.toLowerCase()
                     );
-                    if (match?.city) {
-                      setHotelDetectedCity(match.city);
-                      setValue("logistics.hotel.city", match.city);
+                    if (match) {
+                      const cityGuess = [match.city, match.state, match.country].filter(Boolean).join(", ");
+                      if (cityGuess) {
+                        setHotelDetectedCity(cityGuess);
+                        setValue("logistics.hotel.city", cityGuess);
+                      }
                     }
                   }}
                   style={input}
                 />
                 <datalist id="hotel-options">
-                  {hotelOptions.map((h, i) => (
-                    <option key={i} value={h.name} />
-                  ))}
+                  {hotelOptions.map((h, i) => {
+                    const detail = [h.city, h.state, h.country].filter(Boolean).join(", ");
+                    const label = detail ? `${h.name} - ${detail}` : h.name;
+                    return (
+                      <option key={i} value={h.name} label={label} />
+                    );
+                  })}
                 </datalist>
               </div>
 
@@ -719,7 +964,7 @@ export default function Home() {
                   placeholder="City"
                   value={
                     hotelDetectedCity ||
-                    watch("logistics.hotel.city") ||
+                    hotelCityValue ||
                     cityFromDestination(destination)
                   }
                   onChange={(e) => {
@@ -841,18 +1086,18 @@ export default function Home() {
             style={{
               padding: "10px 16px",
               borderRadius: 10,
-              border: "1px solid #0ea5e9",
-              background: loadingWx ? "#93c5fd" : "#0ea5e9",
-              color: "white",
+              border: "1px solid #3f7077",
+              background: loadingWx ? "#88b7bc" : "#569096",
+              color: "#ffffff",
               fontWeight: 700,
               cursor: loadingWx ? "not-allowed" : "pointer",
               opacity: loadingWx ? 0.8 : 1,
             }}
           >
-            {loadingWx ? "Fetching Weather…" : "🔮 Create My Trip Prep Plan"}
+            {loadingWx ? currentLoadingMessage : "?? Create My Trip Prep Plan"}
           </button>
 
-          {loadingWx && <span aria-live="polite">Fetching weather… ⛅</span>}
+          {loadingWx && <span aria-live="polite">{currentLoadingMessage}</span>}
           {errorWx && <span style={{ color: "crimson" }}>{errorWx}</span>}
         </div>
       </form>

@@ -1,4 +1,4 @@
-// app/api/weather/route.js
+﻿// app/api/weather/route.js
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -19,7 +19,15 @@ function fmtMatched(place) {
   return parts.join(", ");
 }
 function daysBetweenInclusive(a, b) { const d1 = new Date(a); const d2 = new Date(b); d1.setHours(0,0,0,0); d2.setHours(0,0,0,0); return Math.floor((d2 - d1)/86400000) + 1; }
-function isWithinNextNDays(dateStr, n = 16) { const today = new Date(); const target = new Date(dateStr); const diffDays = Math.ceil((target - today) / 86400000); return diffDays <= n; }
+function isWithinNextNDays(dateStr, n = 16) {
+  const today = new Date();
+  const target = new Date(dateStr);
+  if (Number.isNaN(target.getTime())) return false;
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target - today) / 86400000);
+  return diffDays >= 0 && diffDays <= n;
+}
 async function fetchJSON(url, opts) {
   const res = await fetch(url, { ...opts, headers: { ...(opts?.headers || {}), "Cache-Control": "no-store" } });
   if (!res.ok) {
@@ -49,7 +57,7 @@ function extractUsStatePreference(rawInput) {
 
 async function tryGeocodeRaw(q, count = 5) {
   const url = `${OM_GEOCODE}?name=${encodeURIComponent(q)}&count=${count}&language=en&format=json`;
-  console.log("[/api/weather] geocode →", url);
+  console.log("[/api/weather] geocode ->", url);
   const data = await fetchJSON(url);
   return Array.isArray(data?.results) ? data.results : [];
 }
@@ -167,6 +175,15 @@ export async function POST(req) {
     if (!dest)  return new Response(JSON.stringify({ error: "Destination is required." }), { status: 400, headers: { "Content-Type": "application/json" } });
     if (!start) return new Response(JSON.stringify({ error: "Start date is required." }),   { status: 400, headers: { "Content-Type": "application/json" } });
 
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return new Response(JSON.stringify({ error: "Invalid trip dates." }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
+    if (endDate < startDate) {
+      return new Response(JSON.stringify({ error: "End date must be on or after the start date." }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
+
     const place = await geocodeWithFallbacks(dest);
     if (!place?.latitude || !place?.longitude) {
       return new Response(JSON.stringify({ error: "Could not find that destination. Try a city, region, or country." }), {
@@ -177,7 +194,7 @@ export async function POST(req) {
     const longitude = place.longitude;
     const timezone  = place.timezone || "auto";
 
-    const useForecast = isWithinNextNDays(end, 16);
+    const useForecast = isWithinNextNDays(endDate, 16);
 
     if (useForecast) {
       // ---- Forecast (next ~16 days)
@@ -190,7 +207,7 @@ export async function POST(req) {
         end_date: end,
       });
       const url = `${OM_FORECAST}?${params.toString()}`;
-      console.log("[/api/weather] forecast →", url);
+      console.log("[/api/weather] forecast ->", url);
       const data = await fetchJSON(url);
 
       const d = data?.daily || {};
@@ -202,25 +219,42 @@ export async function POST(req) {
       );
 
       const daily = [];
-      let sumMaxC = 0, sumMinC = 0, wetDays = 0;
+      let sumMaxC = 0;
+      let sumMinC = 0;
+      let maxCount = 0;
+      let minCount = 0;
+      let wetDays = 0;
+
       for (let i = 0; i < len; i++) {
-        const date  = d.time[i];
+        const date = d.time[i];
         const tmaxC = d.temperature_2m_max[i];
         const tminC = d.temperature_2m_min[i];
         const precip = d.precipitation_sum?.[i];
 
-        sumMaxC += (typeof tmaxC === "number" ? tmaxC : 0);
-        sumMinC += (typeof tminC === "number" ? tminC : 0);
-        if (typeof precip === "number" && precip > 0) wetDays++;
+        if (typeof tmaxC === "number") {
+          sumMaxC += tmaxC;
+          maxCount++;
+        }
+        if (typeof tminC === "number") {
+          sumMinC += tminC;
+          minCount++;
+        }
+        if (typeof precip === "number" && precip > 0) {
+          wetDays++;
+        }
 
-        daily.push({ date, tmax_f: toF(tmaxC), tmin_f: toF(tminC), precipitation_mm: typeof precip === "number" ? precip : null });
+        daily.push({
+          date,
+          tmax_f: toF(tmaxC),
+          tmin_f: toF(tminC),
+          precipitation_mm: typeof precip === "number" ? precip : null,
+        });
       }
 
-      const daysCount = len || Math.max(1, daysBetweenInclusive(start, end));
-      const avgHighF  = toF(sumMaxC / (len || 1));
-      const avgLowF   = toF(sumMinC / (len || 1));
-      const wetPct    = clampPct((wetDays / daysCount) * 100);
-
+      const daysCount = len || Math.max(1, daysBetweenInclusive(startDate, endDate));
+      const avgHighF = maxCount ? toF(sumMaxC / maxCount) : null;
+      const avgLowF = minCount ? toF(sumMinC / minCount) : null;
+      const wetPct = clampPct((wetDays / daysCount) * 100);
       const summary = {
         avg_high_f: typeof avgHighF === "number" ? Math.round(avgHighF) : null,
         avg_low_f:  typeof avgLowF  === "number" ? Math.round(avgLowF)  : null,
@@ -233,9 +267,9 @@ export async function POST(req) {
       });
     }
 
-    // ---- Outside forecast window → Climate normals attempts
-    const s = new Date(start);
-    const e = new Date(end);
+    // ---- Outside forecast window: climate normals attempts
+    const s = new Date(startDate);
+    const e = new Date(endDate);
     const months = new Set();
     for (let d = new Date(s); d <= e; d.setMonth(d.getMonth() + 1, 1)) {
       months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
@@ -254,14 +288,14 @@ export async function POST(req) {
       `&month=${encodeURIComponent(m)}` +
       `&temperature_2m_max=true&temperature_2m_min=true&precipitation_days=true&precipitation_sum=true`;
 
-    console.log("[/api/weather] climate A (monthly) →", climateUrlA);
+    console.log("[/api/weather] climate A (monthly) ->", climateUrlA);
     let climateA = null;
     try { climateA = await fetchJSON(climateUrlA); } catch (eA) { console.warn("[/api/weather] climate A fetch failed:", eA?.message || eA); }
 
     let maxC = null, minC = null, precipDays = null;
     if (climateA) {
       try {
-        console.log("[/api/weather] climate A keys →", {
+        console.log("[/api/weather] climate A keys ->", {
           topKeys: Object.keys(climateA || {}),
           monthlyKeys: Object.keys(climateA?.monthly || {}),
         });
@@ -272,21 +306,21 @@ export async function POST(req) {
     }
 
     if (typeof maxC === "number" || typeof minC === "number" || typeof precipDays === "number") {
-      const daysInMonth = new Date(2024, monthNum, 0).getDate();
+      const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
       const wetPct = (typeof precipDays === "number" && daysInMonth) ? Math.round((precipDays / daysInMonth) * 100) : null;
 
       const summary = {
         avg_high_f: (typeof maxC === "number") ? Math.round(toF(maxC)) : null,
         avg_low_f:  (typeof minC === "number") ? Math.round(toF(minC)) : null,
         wet_days_pct: wetPct,
-        notes: "Climate normals for this month (1991–2020).",
+        notes: "Climate normals for this month (1991-2020).",
       };
       return new Response(JSON.stringify({ summary, daily: [], matched_location: fmtMatched(place) }), {
         status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }
       });
     }
 
-    // Attempt B: (was daily climate w/ models) — many regions return 400 for models param; skip and go to a robust fallback.
+    // Attempt B skipped: daily climate with models often returns 400, so fall back to the archive API.
 
     // Attempt C (NEW): ERA5 archive daily for the same month last year
     const lastYear = new Date().getFullYear() - 1;
@@ -298,7 +332,7 @@ export async function POST(req) {
       `&end_date=${encodeURIComponent(lastEnd)}` +
       `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum` +
       `&timezone=${encodeURIComponent(timezone)}`;
-    console.log("[/api/weather] archive C (last-year month) →", archiveUrl);
+    console.log("[/api/weather] archive C (last-year month) ->", archiveUrl);
 
     let archive = null;
     try { archive = await fetchJSON(archiveUrl); } catch (eC) { console.warn("[/api/weather] archive fetch failed:", eC?.message || eC); }
@@ -318,7 +352,7 @@ export async function POST(req) {
         const psum = d.precipitation_sum[i];
         if (typeof tmax === "number") { sumMax += tmax; cnt++; }
         if (typeof tmin === "number") { sumMin += tmin; }
-        if (typeof psum === "number" && psum > 1) wet++; // >1mm ≈ wet day
+        if (typeof psum === "number" && psum > 1) wet++; // treat >1mm as a wet day
       }
       const avgMaxC = cnt ? sumMax / cnt : null;
       const avgMinC = cnt ? sumMin / cnt : null;
