@@ -929,7 +929,7 @@ export default function Home() {
       <p style={{ marginBottom: 16 }}>
         <strong>Welcome to The Fulfilled Trip Planner!</strong>
         <br />
-        Your go-to resource for the two weeks leading up to your trip. Stay stress-free and organized with customized packing lists, to-dos, and reminders tailored just for you. Simply enter your details and click "Create Trip Plan" to get started. We are still testing and welcome feedback at rachel@thefulfilledhustle.com!
+        Your go-to resource for the two weeks leading up to your trip. Stay stress-free and organized with customized packing lists, to-dos, and reminders tailored just for you. Simply enter your details and click &quot;Create Trip Plan&quot; to get started. We are still testing and welcome feedback at rachel@thefulfilledhustle.com!
       </p>
 
 
@@ -1575,6 +1575,7 @@ export default function Home() {
     </main>
   );
 }
+
 
 
 
