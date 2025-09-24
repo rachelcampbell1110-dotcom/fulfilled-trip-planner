@@ -23,6 +23,16 @@ function takeN(list, n = 8) {
   return list.slice(0, n);
 }
 
+function formatAirportSummary(details) {
+  if (!details) return "";
+  const parts = [safeStr(details.code), safeStr(details.name)].filter(Boolean);
+  const location = [safeStr(details.city), safeStr(details.state), safeStr(details.country)]
+    .filter(Boolean)
+    .join(", " );
+  if (location) parts.push(`(${location})`);
+  return parts.filter(Boolean).join(" - " );
+}
+
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -33,6 +43,25 @@ export async function POST(req) {
     const start_date      = safeStr(t.start_date);
     const end_date        = safeStr(t.end_date || t.start_date);
     const activities      = arr(t.activities);
+    const activity_details = arr(t.activity_details)
+      .map((entry) => {
+        const key = safeStr(entry?.key);
+        const label = safeStr(entry?.label);
+        const detail = { key, label };
+        if (entry?.venue) {
+          const venue = entry.venue;
+          const venueDetail = {
+            name: safeStr(venue?.name),
+            city: safeStr(venue?.city),
+            type_hint: safeStr(venue?.type_hint),
+          };
+          if (venueDetail.name || venueDetail.city || venueDetail.type_hint) {
+            detail.venue = venueDetail;
+          }
+        }
+        return detail;
+      })
+      .filter((entry) => entry.key || entry.label);
     const transportation  = safeStr(t.transportation);
     const accommodation   = safeStr(t.accommodation);
     const modes            = arr(t.modes).filter((m) => typeof m === "string" && m.trim());
@@ -70,16 +99,33 @@ export async function POST(req) {
     })();
     const solo_via_counts = traveler_summary.total <= 1;
     const traveling_solo_flag = Boolean(context_flags?.traveling_solo) || solo_via_counts;
+    const traveling_with_friends_flag = Boolean(context_flags?.traveling_with_friends);
     const has_children_flag = traveler_summary.children > 0;
 
     // Hotel micro-context
     const hotel_name      = safeStr(t?.logistics?.hotel?.name);
     const hotel_city      = safeStr(t?.logistics?.hotel?.city);
+    const hotel_input_raw = t?.hotel_input || {};
+    const hotel_requested_name = safeStr(hotel_input_raw?.name);
+    const hotel_requested_city_hint = safeStr(hotel_input_raw?.city_hint);
 
     // Airline / airport micro-context
     const fly                 = t?.logistics?.fly || {};
     const departure_airport   = safeStr(fly.departure_airport); // e.g., "BOS"
     const airline             = safeStr(fly.airline);           // e.g., "JetBlue"
+    const departure_airport_details = (() => {
+      const raw = fly?.departure_airport_details || null;
+      if (!raw) return null;
+      return {
+        code: safeStr(raw.code),
+        name: safeStr(raw.name),
+        city: safeStr(raw.city),
+        state: safeStr(raw.state),
+        country: safeStr(raw.country),
+        summary: formatAirportSummary(raw),
+      };
+    })();
+    const departure_airport_code = departure_airport_details?.code || departure_airport;
 
     // Venue micro-context
     const venue_input   = t?.venue_input || {};
@@ -160,6 +206,7 @@ Guidelines:
 - Fold cruise guidance, if selected, into all applicable sections (timeline, packing, smart must-haves) with reminders about online check-in windows, required IDs, embarkation-day essentials, and verifying dress-code nights.
 - If trip_type is "work": keep every checklist business-forward (laptop + charger, meeting materials, coworking passes, garment care) and note out-of-office or agenda reviews when relevant.
 - If traveler_summary.total <= 1 or context_flags.traveling_solo is true: reinforce solo-safety habits (share itinerary, duplicate IDs) and keep packing lean across sections.
+- If context_flags.traveling_with_friends is true: add communal touches (shared cost reminders, coordinated outfits, group reservations) and celebrate co-planning moments.
 - If traveler_summary.children === 0 and context_flags.single_parent is false: avoid kid-specific items unless a venue/activity absolutely requires them.
 - If hotel name + city present: use "check" language only (pool hours, crib/mini-fridge, parking/shuttle, laundry).
 - All lists should feel like a one-stop prep hub; avoid fluff, stay under the caps, and keep language natural. No emojis. No markdown. No claims of specifics.
@@ -173,14 +220,17 @@ Guidelines:
       accommodation,
       activities,
       trip_type,
+      traveling_with_friends: traveling_with_friends_flag,
       context_flags: {
         traveling_solo: traveling_solo_flag,
         single_parent: Boolean(context_flags?.single_parent),
+        traveling_with_friends: traveling_with_friends_flag,
       },
       travelers: traveler_list,
       traveler_summary: {
         ...traveler_summary,
         traveling_solo: traveling_solo_flag,
+        traveling_with_friends: traveling_with_friends_flag,
         has_children: has_children_flag,
       },
       modes,
@@ -191,8 +241,17 @@ Guidelines:
         day_trip: modes.includes("day_trip"),
       },
       venue: { name: venue_name, city: venue_city, activity_types: venue_types },
-      flight: { departure_airport, airline },
-      hotel: { name: hotel_name, city: hotel_city },
+      flight: {
+        departure_airport: departure_airport_code,
+        airline,
+        departure_airport_details,
+      },
+      hotel: {
+        name: hotel_name,
+        city: hotel_city,
+        requested_name: hotel_requested_name,
+        requested_city_hint: hotel_requested_city_hint,
+      },
       weather_summary: {
         matched_location,
         avg_high_f,
@@ -267,3 +326,8 @@ Guidelines:
 export async function GET() {
   return new Response("Use POST.", { status: 405, headers: { Allow: "POST", "Content-Type": "text/plain" } });
 }
+
+
+
+
+

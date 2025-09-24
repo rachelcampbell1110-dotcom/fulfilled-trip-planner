@@ -1,0 +1,137 @@
+diff --git a/components/PlanPreview.jsx b/components/PlanPreview.jsx
+--- a/components/PlanPreview.jsx
++++ b/components/PlanPreview.jsx
+@@
+   const card = { border: "1px solid #c7dfe3", borderRadius: 16, padding: 18, marginTop: 16, background: THEME_LIGHT, boxShadow: "0 8px 20px rgba(86, 144, 150, 0.08)" };
+   const itemRowStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
++
++  const checkedItems = localPlan?._checkedItems || {};
++
++  const makeChecklistKey = (...parts) => parts.filter(Boolean).join("::");
++
++  const toggleChecklistItem = (key) => {
++    if (!key) return;
++    setLocalPlan((prev) => {
++      const next = structuredClone(prev || {});
++      const map = { ...(next._checkedItems || {}) };
++      if (map[key]) {
++        delete map[key];
++      } else {
++        map[key] = true;
++      }
++      if (Object.keys(map).length) {
++        next._checkedItems = map;
++      } else {
++        delete next._checkedItems;
++      }
++      return next;
++    });
++  };
+ 
+   const getDayLabel = (entry) => (entry?.day ?? entry?.when ?? "").toString() || "???";
+@@
+-  const combinedDisplay = minimalistMode && minimalCombined.length ? minimalCombined : combined;
+-
+-  const upsertLocalPlan = (mutateFn) => {
+-    setLocalPlan((prev) => {
+-      const next = structuredClone(prev);
+-      mutateFn(next);
+-      return next;
+-    });
+-  };
++  const combinedDisplay = minimalistMode && minimalCombined.length ? minimalCombined : combined;
++
++  const pruneCheckedItems = (plan, keys = []) => {
++    if (!plan?._checkedItems || !Array.isArray(keys) || keys.length === 0) return;
++    let changed = false;
++    keys.forEach((key) => {
++      if (key && plan._checkedItems[key]) {
++        delete plan._checkedItems[key];
++        changed = true;
++      }
++    });
++    if (changed && Object.keys(plan._checkedItems).length === 0) {
++      delete plan._checkedItems;
++    }
++  };
++
++  const upsertLocalPlan = (mutateFn, cleanupKeys = []) => {
++    setLocalPlan((prev) => {
++      const next = structuredClone(prev || {});
++      mutateFn(next);
++      if (cleanupKeys.length) {
++        pruneCheckedItems(next, cleanupKeys);
++      }
++      return next;
++    });
++  };
+@@
+-      recomputeMinimalCombined(next.packing, preserved);
+-    });
++      recomputeMinimalCombined(next.packing, preserved);
++    }, [makeChecklistKey("packing", "combined", item)]);
+   };
+@@
+-      recomputeMinimalCombined(next.packing, preserved);
+-    });
++      recomputeMinimalCombined(next.packing, preserved);
++    }, [makeChecklistKey("packing", "person", name, item)]);
+   };
+@@
+-    upsertLocalPlan((next) => {
++    upsertLocalPlan((next) => {
+       next.smart_must_haves = Array.isArray(next.smart_must_haves)
+         ? next.smart_must_haves.filter((x) => x !== item)
+         : [];
+-    });
++    }, [makeChecklistKey("smartMustHaves", item)]);
+   };
+@@
+-    upsertLocalPlan((next) => {
++    upsertLocalPlan((next) => {
+       if (!next.overpack || !Array.isArray(next.overpack[key])) return;
+       next.overpack[key] = next.overpack[key].filter((x) => x !== item);
+-    });
++    }, [makeChecklistKey("overpack", key, item)]);
+   };
+@@
+-  const removeTimelineTask = (dayLabel, task) => {
+-    upsertLocalPlan((next) => {
++  const removeTimelineTask = (dayLabel, task) => {
++    const cleanupKey = makeChecklistKey("timeline", dayLabel, task);
++    upsertLocalPlan((next) => {
+       if (!Array.isArray(next.timeline)) return;
+       next.timeline = next.timeline
+         .map((entry) => {
+@@
+           const tasks = Array.isArray(entry.tasks) ? entry.tasks : [];
+           return tasks.length > 0;
+-        });
+-    });
++        });
++    }, [cleanupKey]);
+   };
+@@
+-                  <input type="checkbox" /> <span>{item}</span>
++                  <input type="checkbox" checked={Boolean(checkedItems[makeChecklistKey("smartMustHaves", item)])} onChange={() => toggleChecklistItem(makeChecklistKey("smartMustHaves", item))} /> <span>{item}</span>
+@@
+-                            <input type="checkbox" /> <span>{item}</span>
++                            <input type="checkbox" checked={Boolean(checkedItems[makeChecklistKey("packing", "person", name, item)])} onChange={() => toggleChecklistItem(makeChecklistKey("packing", "person", name, item))} /> <span>{item}</span>
+@@
+-                    <input type="checkbox" /> <span>{item}</span>
++                    <input type="checkbox" checked={Boolean(checkedItems[makeChecklistKey("packing", "combined", item)])} onChange={() => toggleChecklistItem(makeChecklistKey("packing", "combined", item))} /> <span>{item}</span>
+@@
+-                  <input type="checkbox" /> <span>{t}</span>
++                  <input type="checkbox" checked={Boolean(checkedItems[makeChecklistKey("overpack", "skip", t)])} onChange={() => toggleChecklistItem(makeChecklistKey("overpack", "skip", t))} /> <span>{t}</span>
+@@
+-                  <input type="checkbox" /> <span>{t}</span>
++                  <input type="checkbox" checked={Boolean(checkedItems[makeChecklistKey("overpack", "lastMinute", t)])} onChange={() => toggleChecklistItem(makeChecklistKey("overpack", "lastMinute", t))} /> <span>{t}</span>
+@@
+-                  <input type="checkbox" /> <span>{t}</span>
++                  <input type="checkbox" checked={Boolean(checkedItems[makeChecklistKey("overpack", "housePrep", t)])} onChange={() => toggleChecklistItem(makeChecklistKey("overpack", "housePrep", t))} /> <span>{t}</span>
+@@
+-                    <input type="checkbox" /> <span>{t}</span>
++                    <input type="checkbox" checked={Boolean(checkedItems[makeChecklistKey("lodging", "infantToddler", t)])} onChange={() => toggleChecklistItem(makeChecklistKey("lodging", "infantToddler", t))} /> <span>{t}</span>
+@@
+-                            <input type="checkbox" /> <span>{task}</span>
++                            <input type="checkbox" checked={Boolean(checkedItems[makeChecklistKey("timeline", dayLabel, task)])} onChange={() => toggleChecklistItem(makeChecklistKey("timeline", dayLabel, task))} /> <span>{task}</span>

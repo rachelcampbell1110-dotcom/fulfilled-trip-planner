@@ -1,0 +1,172 @@
+[
+  {
+    "city": "Orlando",
+    "state": "Florida",
+    "country": "United States",
+    "hotels": [
+      "Disney's Grand Floridian Resort & Spa",
+      "Disney's Contemporary Resort",
+      "Loews Portofino Bay Hotel",
+      "Hyatt Regency Orlando",
+      "Walt Disney World Swan Reserve",
+      "JW Marriott Orlando Grande Lakes",
+      "Hilton Orlando Bonnet Creek",
+      "Ritz-Carlton Orlando Grande Lakes",
+      "Rosen Shingle Creek",
+      "Gaylord Palms Resort"
+    ]
+  },
+  {
+    "city": "Las Vegas",
+    "state": "Nevada",
+    "country": "United States",
+    "hotels": [
+      "Bellagio Hotel & Casino",
+      "Caesars Palace",
+      "ARIA Resort & Casino",
+      "Wynn Las Vegas",
+      "The Venetian Resort",
+      "MGM Grand Hotel & Casino",
+      "The Cosmopolitan of Las Vegas",
+      "Resorts World Las Vegas",
+      "Encore at Wynn Las Vegas",
+      "Mandarin Oriental Las Vegas"
+    ]
+  },
+  {
+    "city": "New York",
+    "state": "New York",
+    "country": "United States",
+    "hotels": [
+      "The Plaza",
+      "The St. Regis New York",
+      "The Ritz-Carlton New York Central Park",
+      "Park Hyatt New York",
+      "Conrad New York Downtown",
+      "Lotte New York Palace",
+      "The Peninsula New York",
+      "Four Seasons Hotel New York Downtown",
+      "The Langham New York Fifth Avenue",
+      "JW Marriott Essex House"
+    ]
+  },
+  {
+    "city": "Miami",
+    "state": "Florida",
+    "country": "United States",
+    "hotels": [
+      "Fontainebleau Miami Beach",
+      "EAST Miami",
+      "The Setai Miami Beach",
+      "Mandarin Oriental Miami",
+      "JW Marriott Marquis Miami",
+      "Loews Miami Beach Hotel",
+      "Kimpton EPIC Hotel",
+      "1 Hotel South Beach",
+      "W South Beach",
+      "The Ritz-Carlton South Beach"
+    ]
+  },
+  {
+    "city": "Chicago",
+    "state": "Illinois",
+    "country": "United States",
+    "hotels": [
+      "The Langham Chicago",
+      "The Peninsula Chicago",
+      "Four Seasons Hotel Chicago",
+      "Waldorf Astoria Chicago",
+      "Park Hyatt Chicago",
+      "LondonHouse Chicago",
+      "Loews Chicago Hotel",
+      "JW Marriott Chicago",
+      "The Ritz-Carlton Chicago",
+      "Fairmont Chicago Millennium Park"
+    ]
+  },
+  {
+    "city": "Los Angeles",
+    "state": "California",
+    "country": "United States",
+    "hotels": [
+      "The Beverly Hilton",
+      "The Ritz-Carlton Los Angeles",
+      "Four Seasons Hotel Los Angeles at Beverly Hills",
+      "Waldorf Astoria Beverly Hills",
+      "Fairmont Miramar Hotel",
+      "JW Marriott Los Angeles L.A. LIVE",
+      "Hotel Bel-Air",
+      "Kimpton La Peer Hotel",
+      "SLS Hotel Beverly Hills",
+      "The West Hollywood EDITION"
+    ]
+  },
+  {
+    "city": "Seattle",
+    "state": "Washington",
+    "country": "United States",
+    "hotels": [
+      "Fairmont Olympic Hotel",
+      "The Edgewater Hotel",
+      "Hotel 1000",
+      "Thompson Seattle",
+      "Grand Hyatt Seattle",
+      "Pan Pacific Hotel Seattle",
+      "W Seattle",
+      "Hyatt Regency Seattle",
+      "Kimpton Hotel Monaco Seattle",
+      "Four Seasons Hotel Seattle"
+    ]
+  },
+  {
+    "city": "San Francisco",
+    "state": "California",
+    "country": "United States",
+    "hotels": [
+      "Fairmont San Francisco",
+      "Hotel Nikko San Francisco",
+      "The St. Regis San Francisco",
+      "The Ritz-Carlton San Francisco",
+      "Palace Hotel",
+      "Grand Hyatt San Francisco",
+      "Four Seasons Hotel San Francisco",
+      "InterContinental San Francisco",
+      "Argonaut Hotel",
+      "JW Marriott San Francisco Union Square"
+    ]
+  },
+  {
+    "city": "Honolulu",
+    "state": "Hawaii",
+    "country": "United States",
+    "hotels": [
+      "Halekulani",
+      "Moana Surfrider",
+      "Prince Waikiki",
+      "The Kahala Hotel & Resort",
+      "Hilton Hawaiian Village",
+      "Sheraton Waikiki",
+      "Outrigger Reef Waikiki Beach Resort",
+      "Alohilani Resort Waikiki Beach",
+      "Hilton Waikiki Beach",
+      "The Royal Hawaiian"
+    ]
+  },
+  {
+    "city": "Denver",
+    "state": "Colorado",
+    "country": "United States",
+    "hotels": [
+      "The Brown Palace Hotel",
+      "Four Seasons Hotel Denver",
+      "The Crawford Hotel",
+      "The Maven Hotel",
+      "Grand Hyatt Denver",
+      "The Jacquard",
+      "Halcyon Cherry Creek",
+      "Limelight Hotel Denver",
+      "Oxford Hotel",
+      "The Rally Hotel"
+    ]
+  }
+]

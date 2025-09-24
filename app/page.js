@@ -2,8 +2,10 @@
 "use client";
 
 import { useForm, useFieldArray, Controller } from "react-hook-form";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PlanPreview from "../components/PlanPreview.jsx";
+import DateRangePicker from "../components/DateRangePicker.jsx";
+import airports from "../data/airports.json";
 import { buildPlan } from "../lib/buildPlan.js";
 
 // Merge AI output into the rule-built plan
@@ -98,6 +100,11 @@ const ACTIVITY_OPTIONS = [
   { key: "camping", label: "Camping" },
   { key: "theme_park", label: "Theme Park 🎢" },
 ];
+const ACTIVITY_LABEL_LOOKUP = ACTIVITY_OPTIONS.reduce((acc, option) => {
+  acc[option.key] = option.label;
+  return acc;
+}, {});
+
 
 const LOADING_MESSAGES = [
   "Fetching weather details...",
@@ -106,91 +113,335 @@ const LOADING_MESSAGES = [
   "Making all the lists...",
 ];
 
+const POPULAR_AIRPORTS = airports
+  .map((airport) => {
+    const code = airport.iata || airport.icao || "";
+    if (!code) return null;
+    const name = airport.name || "";
+    const locationBits = [airport.city, airport.state, airport.country]
+      .filter(Boolean)
+      .join(", ");
+    const label = [code, name, locationBits ? `(${locationBits})` : ""]
+      .filter(Boolean)
+      .join(" ");
+    return {
+      code,
+      name,
+      city: airport.city || "",
+      state: airport.state || "",
+      country: airport.country || "",
+      label,
+    };
+  })
+  .filter(Boolean)
+  .sort((a, b) => a.code.localeCompare(b.code));
+
+const DRAFT_STORAGE_KEY = "fulfilled-trip-planner-draft-v1";
+
+const DEFAULT_FORM_VALUES = {
+  modes: ["fly"],
+  trip_type: "personal",
+  destination: "",
+  date_range: { start: "", end: "" },
+  accommodation: "",
+  transportation: "",
+  traveler_counts: { adults: 2, children: 1 },
+  adult_travelers: [{ name: "" }, { name: "" }],
+  child_travelers: [{ name: "", age: "" }],
+  context_flags: {
+    traveling_solo: false,
+    single_parent: false,
+    traveling_with_friends: false,
+  },
+  activities: [],
+  accessibility: {
+    mobility: false,
+    sensory: false,
+    medical: false,
+    dietary: false,
+    notes: "",
+  },
+  logistics: {
+    fly: {
+      departure_airport: "",
+      departure_airport_details: null,
+      airline: "",
+      flight_time_local: "",
+    },
+    drive: { start_location: "", estimated_hours: "" },
+    day_trip: { transport: "car" },
+    cruise: {
+      cruise_line: "",
+      ship_name: "",
+      embark_port: "",
+      disembark_port: "",
+      embark_time_local: "",
+    },
+    hotel: { name: "", city: "" },
+  },
+  venue_input: {
+    name: "",
+    city: "",
+    type_hint: "",
+    activities: [],
+    known_venue_id: "",
+  },
+};
+
+const cloneDefaults = () => JSON.parse(JSON.stringify(DEFAULT_FORM_VALUES));
+const cloneDeep = (value) => (value == null ? value : JSON.parse(JSON.stringify(value)));
+
+function deepMerge(target, source) {
+  if (Array.isArray(source)) {
+    return source.map((item) =>
+      typeof item === "object" && item !== null ? deepMerge({}, item) : item
+    );
+  }
+  if (typeof source !== "object" || source === null) {
+    return typeof source !== "undefined" ? source : target;
+  }
+  const output = Array.isArray(target) ? [...target] : { ...target };
+  Object.keys(source).forEach((key) => {
+    const value = source[key];
+    if (Array.isArray(value)) {
+      output[key] = value.map((item) =>
+        typeof item === "object" && item !== null ? deepMerge({}, item) : item
+      );
+    } else if (typeof value === "object" && value !== null) {
+      output[key] = deepMerge(
+        typeof output[key] === "object" && output[key] !== null ? output[key] : {},
+        value
+      );
+    } else if (typeof value !== "undefined") {
+      output[key] = value;
+    }
+  });
+  return output;
+}
+
 export default function Home() {
   const [submitted, setSubmitted] = useState(null);
   const [showAccessibility, setShowAccessibility] = useState(false);
   const [loadingWx, setLoadingWx] = useState(false);
   const [errorWx, setErrorWx] = useState("");
-  const [destSuggestions, setDestSuggestions] = useState([]);
-
-  // --- HOTEL AUTOSUGGEST STATE (NEW) ---
   const [hotelQuery, setHotelQuery] = useState("");
-  const [hotelOptions, setHotelOptions] = useState([]); // [{name, city}]
+  const [hotelOptions, setHotelOptions] = useState([]);
   const [hotelDetectedCity, setHotelDetectedCity] = useState("");
-  const [airportQuery, setAirportQuery] = useState("");
-  const [airportOptions, setAirportOptions] = useState([]);
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+  const [pendingDraft, setPendingDraft] = useState(null);
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [manualSaveFeedback, setManualSaveFeedback] = useState("");
 
+  const planSectionRef = useRef(null);
+  const saveTimerRef = useRef(null);
+  const skipAutoSaveRef = useRef(true);
+  const manualSaveFeedbackTimer = useRef(null);
+  const planSnapshotRef = useRef(null);
   const {
     register,
     control,
     handleSubmit,
     watch,
     setValue,
+    getValues,
+    reset,
     formState: { errors },
   } = useForm({
-    defaultValues: {
-      modes: ["fly"],
-      trip_type: "personal",
-      destination: "",
-      start_date: "",
-      end_date: "",
-      accommodation: "",
-      transportation: "",
-      travelers: [
-        { name: "", age: "", type: "adult" },
-        { name: "", age: "", type: "child" },
-      ],
-      context_flags: { traveling_solo: false, single_parent: false },
-      activities: [],
-      accessibility: {
-        mobility: false,
-        sensory: false,
-        medical: false,
-        dietary: false,
-        notes: "",
-      },
-      logistics: {
-        fly: { departure_airport: "", airline: "", flight_time_local: "" },
-        drive: { start_location: "", estimated_hours: "" },
-        day_trip: { transport: "car" },
-        cruise: { cruise_line: "", ship_name: "", embark_port: "", disembark_port: "", embark_time_local: "" },
-        hotel: { name: "", city: "" }, // NEW
-      },
-      venue_input: {
-        name: "",
-        city: "",
-        type_hint: "",
-        activities: [],
-        known_venue_id: "",
-      },
-    },
+    defaultValues: cloneDefaults(),
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const secondaryButtonStyle = {
+    padding: "8px 12px",
+    borderRadius: 8,
+    border: "1px solid #d1d5db",
+    background: "#f8fafc",
+    color: "#1f2937",
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+
+  const formatTimestamp = (ts) => {
+    if (!ts) return "";
+    try {
+      return new Date(ts).toLocaleString(undefined, {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    } catch (err) {
+      return "";
+    }
+  };
+
+  const handleResumeDraft = () => {
+    if (!pendingDraft?.form) {
+      setShowDraftBanner(false);
+      return;
+    }
+    const applyPendingPlan = () => {
+      if (pendingDraft?.submitted) {
+        setSubmitted(pendingDraft.submitted);
+        planSnapshotRef.current = cloneDeep(pendingDraft.submitted);
+      } else {
+        planSnapshotRef.current = null;
+      }
+    };
+    if (typeof window === "undefined") {
+      reset(pendingDraft.form);
+      applyPendingPlan();
+      setShowDraftBanner(false);
+      setLastSavedAt(pendingDraft.updatedAt || Date.now());
+      setPendingDraft(null);
+      return;
+    }
+    try {
+      const merged = deepMerge(cloneDefaults(), pendingDraft.form);
+      reset(merged);
+      skipAutoSaveRef.current = true;
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      applyPendingPlan();
+      const payload = {
+        form: merged,
+        submitted: planSnapshotRef.current ? cloneDeep(planSnapshotRef.current) : null,
+        updatedAt: pendingDraft.updatedAt || Date.now(),
+      };
+      window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+      setLastSavedAt(payload.updatedAt);
+      setPendingDraft(null);
+      setShowDraftBanner(false);
+    } catch (err) {
+      console.warn("Failed to resume saved plan:", err);
+      setShowDraftBanner(false);
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch (err) {
+        console.warn("Failed to discard saved plan:", err);
+      }
+    }
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    setPendingDraft(null);
+    setShowDraftBanner(false);
+    setLastSavedAt(null);
+    skipAutoSaveRef.current = true;
+  };
+
+  const handleManualSave = (planOverride = null) => {
+    if (typeof window === "undefined") return;
+    try {
+      const values = getValues();
+      let planPayload = null;
+      if (planOverride) {
+        planPayload = {
+          _plan: cloneDeep(planOverride),
+          ai: submitted?.ai ? cloneDeep(submitted.ai) : null,
+        };
+      } else if (planSnapshotRef.current) {
+        planPayload = cloneDeep(planSnapshotRef.current);
+      } else if (submitted) {
+        planPayload = cloneDeep(submitted);
+      }
+      planSnapshotRef.current = planPayload ? cloneDeep(planPayload) : planSnapshotRef.current;
+      const payload = {
+        form: values,
+        submitted: planSnapshotRef.current ? cloneDeep(planSnapshotRef.current) : null,
+        updatedAt: Date.now(),
+      };
+      window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+      setLastSavedAt(payload.updatedAt);
+      setPendingDraft(payload);
+      setShowDraftBanner(false);
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      if (manualSaveFeedbackTimer.current) {
+        window.clearTimeout(manualSaveFeedbackTimer.current);
+      }
+      setManualSaveFeedback("Saved!");
+      manualSaveFeedbackTimer.current = window.setTimeout(() => {
+        setManualSaveFeedback("");
+      }, 2500);
+      skipAutoSaveRef.current = true;
+    } catch (err) {
+      console.warn("Manual save failed:", err);
+      if (manualSaveFeedbackTimer.current) {
+        window.clearTimeout(manualSaveFeedbackTimer.current);
+      }
+      setManualSaveFeedback("Unable to save progress.");
+      manualSaveFeedbackTimer.current = window.setTimeout(() => {
+        setManualSaveFeedback("");
+      }, 3000);
+    }
+  };
+
+  const handleClearSavedDraft = () => {
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch (err) {
+        console.warn("Failed to clear saved plan:", err);
+      }
+    }
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    planSnapshotRef.current = null;
+    setPendingDraft(null);
+    setLastSavedAt(null);
+    setShowDraftBanner(false);
+    if (manualSaveFeedbackTimer.current) {
+      window.clearTimeout(manualSaveFeedbackTimer.current);
+    }
+    setManualSaveFeedback("Saved plan cleared.");
+    manualSaveFeedbackTimer.current = window.setTimeout(() => {
+      setManualSaveFeedback("");
+    }, 2500);
+    skipAutoSaveRef.current = true;
+  };
+
+  const {
+    fields: adultFields,
+    append: appendAdult,
+    remove: removeAdult,
+  } = useFieldArray({
     control,
-    name: "travelers",
+    name: "adult_travelers",
   });
 
-  const modes = watch("modes") || [];
-  const start = watch("start_date");
-  const end = watch("end_date");
-  const destination = watch("destination");
-  const accommodation = watch("accommodation"); // NEW
-  const departureAirportValue = watch("logistics.fly.departure_airport");
+  const {
+    fields: childFields,
+    append: appendChild,
+    remove: removeChild,
+  } = useFieldArray({
+    control,
+    name: "child_travelers",
+  });
+
+  const modesRaw = watch("modes");
+  const modes = useMemo(() => (Array.isArray(modesRaw) ? modesRaw : []), [modesRaw]);
+  const dateRange = watch("date_range") || { start: "", end: "" };
+  const start = dateRange.start || "";
+  const end = dateRange.end || "";
+  const destination = watch("destination") || "";
+  const accommodation = watch("accommodation") || "";
+  const travelerCounts = watch("traveler_counts") || { adults: 0, children: 0 };
+  const departureAirportDetails = watch("logistics.fly.departure_airport_details");
   const hotelCityValue = watch("logistics.hotel.city");
   const hotelNameValue = watch("logistics.hotel.name");
   const dayTripSelected = modes.includes("day_trip");
-  const endMin = start || "";
-
-  useEffect(() => {
-    if (!modes.includes("fly")) {
-      setAirportQuery("");
-      setValue("logistics.fly.departure_airport", "");
-      return;
-    }
-    setAirportQuery(departureAirportValue || "");
-  }, [departureAirportValue, modes, setValue]);
+  const flySelected = modes.includes("fly");
 
   useEffect(() => {
     setHotelQuery(hotelNameValue || "");
@@ -214,98 +465,140 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [loadingWx]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === "object" && parsed.form) {
+        setPendingDraft(parsed);
+        planSnapshotRef.current = parsed?.submitted ? cloneDeep(parsed.submitted) : null;
+        setLastSavedAt(parsed.updatedAt || null);
+        setShowDraftBanner(true);
+      }
+    } catch (err) {
+      console.warn("Failed to load saved plan:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const subscription = watch((value) => {
+      if (skipAutoSaveRef.current) {
+        skipAutoSaveRef.current = false;
+        return;
+      }
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+      saveTimerRef.current = window.setTimeout(() => {
+        try {
+          const planSnapshot = planSnapshotRef.current ? cloneDeep(planSnapshotRef.current) : null;
+          const payload = { form: value, submitted: planSnapshot, updatedAt: Date.now() };
+          window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+          setLastSavedAt(payload.updatedAt);
+        } catch (err) {
+          console.warn("Auto-save failed:", err);
+        }
+      }, 600);
+    });
+    return () => {
+      subscription.unsubscribe();
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [watch]);
+
+  useEffect(() => () => {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+    if (manualSaveFeedbackTimer.current) {
+      window.clearTimeout(manualSaveFeedbackTimer.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    planSnapshotRef.current = submitted ? cloneDeep(submitted) : null;
+  }, [submitted]);
+
+  useEffect(() => {
+    if (!submitted?._plan) return;
+    requestAnimationFrame(() => {
+      planSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [submitted]);
+
   const includesMode = (key) => modes.includes(key);
 
-  // Small helper (NEW)
+  const saveStatusText = manualSaveFeedback || (lastSavedAt ? `Last saved ${formatTimestamp(lastSavedAt)} (stored on this device).` : "Progress auto-saves on this device.");
+  const saveStatusColor = manualSaveFeedback
+    ? manualSaveFeedback.toLowerCase().includes("unable")
+      ? "crimson"
+      : "#047857"
+    : "#4b5563";
+
   function cityFromDestination(dest) {
     const t = (dest || "").split(",")[0]?.trim();
     return t || "";
   }
 
-  // Keep Day Trip to single date (mirror start->end)
+  const formatAirportSummary = (details) => {
+    if (!details) return "";
+    const parts = [details.code, details.name].filter(Boolean);
+    const location = [details.city, details.state, details.country]
+      .filter(Boolean)
+      .join(", ");
+    if (location) parts.push(`(${location})`);
+    return parts.join(" - ");
+  };
+
   useEffect(() => {
-    if (dayTripSelected && start && start !== end) setValue("end_date", start);
+    if (dayTripSelected && start && start !== end) {
+      setValue(
+        "date_range",
+        { start, end: start },
+        { shouldDirty: true, shouldValidate: true }
+      );
+    }
   }, [dayTripSelected, start, end, setValue]);
 
-  // ---- Destination autosuggest (Places API) ----
   useEffect(() => {
-    const q = (destination || "").trim();
-    if (q.length < 2) {
-      setDestSuggestions([]);
-      return;
+    if (!flySelected) {
+      setValue("logistics.fly.departure_airport", "");
+      setValue("logistics.fly.departure_airport_details", null);
     }
-    const ctrl = new AbortController();
-    const run = async () => {
-      try {
-        const res = await fetch(`/api/places?q=${encodeURIComponent(q)}`, {
-          signal: ctrl.signal,
-          headers: { "Cache-Control": "no-store" },
-        });
-        if (!res.ok) {
-          setDestSuggestions([]);
-          return;
-        }
-        const data = await res.json();
-        const items = Array.isArray(data?.results)
-          ? data.results
-              .map((entry) => entry?.label || entry?.full || "")
-              .filter(Boolean)
-          : [];
-        setDestSuggestions(items.slice(0, 8));
-      } catch {
-        setDestSuggestions([]);
-      }
-    };
-    const t = setTimeout(run, 250);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [destination]);
+  }, [flySelected, setValue]);
 
-  // ---- Airport lookup (local dataset) ----
   useEffect(() => {
-    const q = (airportQuery || "").trim();
-    if (!modes.includes("fly")) {
-      setAirportOptions([]);
-      return;
-    }
-    if (q.length < 2) {
-      setAirportOptions([]);
-      return;
-    }
-    const ctrl = new AbortController();
-    const run = async () => {
-      try {
-        const res = await fetch(`/api/airports?q=${encodeURIComponent(q)}`, {
-          signal: ctrl.signal,
-          headers: { "Cache-Control": "no-store" },
-        });
-        if (!res.ok) {
-          setAirportOptions([]);
-          return;
-        }
-        const data = await res.json();
-        const items = Array.isArray(data?.airports) ? data.airports : [];
-        const seen = new Set();
-        const unique = [];
-        items.forEach((item) => {
-          const key = (item?.iata || item?.icao || item?.name || "").toLowerCase();
-          if (!key || seen.has(key)) return;
-          seen.add(key);
-          unique.push(item);
-        });
-        setAirportOptions(unique.slice(0, 12));
-      } catch {
-        setAirportOptions([]);
+    const adults = Math.max(0, Number(travelerCounts.adults) || 0);
+    const currentAdults = adultFields.length;
+    if (currentAdults < adults) {
+      for (let i = currentAdults; i < adults; i += 1) {
+        appendAdult({ name: "" }, { shouldFocus: false });
       }
-    };
-    const t = setTimeout(run, 250);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [airportQuery, modes]);
+    } else if (currentAdults > adults) {
+      for (let i = currentAdults - 1; i >= adults; i -= 1) {
+        removeAdult(i);
+      }
+    }
+  }, [travelerCounts.adults, adultFields.length, appendAdult, removeAdult]);
+
+  useEffect(() => {
+    const children = Math.max(0, Number(travelerCounts.children) || 0);
+    const currentChildren = childFields.length;
+    if (currentChildren < children) {
+      for (let i = currentChildren; i < children; i += 1) {
+        appendChild({ name: "", age: "" }, { shouldFocus: false });
+      }
+    } else if (currentChildren > children) {
+      for (let i = currentChildren - 1; i >= children; i -= 1) {
+        removeChild(i);
+      }
+    }
+  }, [travelerCounts.children, childFields.length, appendChild, removeChild]);
 
   // ---- Hotel name autosuggest (calls /api/hotels) (NEW) ----
   useEffect(() => {
@@ -362,16 +655,33 @@ export default function Home() {
     setLoadingWx(true);
 
     // Build trip_input
-    const cleanedTravelers = (values.travelers || [])
-      .filter((t) => t.name?.trim())
+    const adultsRaw = Array.isArray(values.adult_travelers) ? values.adult_travelers : [];
+    const childrenRaw = Array.isArray(values.child_travelers) ? values.child_travelers : [];
+    const cleanedAdults = adultsRaw
       .map((t) => ({
-        name: t.name.trim(),
-        age: Number(t.age || 0),
-        type: t.type === "adult" ? "adult" : "child",
-      }));
+        name: t?.name?.trim() || "",
+        type: "adult",
+      }))
+      .filter((t) => t.name);
+    const cleanedChildren = childrenRaw
+      .map((t) => {
+        const name = t?.name?.trim() || "";
+        const ageValue = t?.age;
+        const ageNumber =
+          ageValue === "" || ageValue === null || typeof ageValue === "undefined"
+            ? null
+            : Number(ageValue);
+        return {
+          name,
+          age: Number.isFinite(ageNumber) ? ageNumber : null,
+          type: "child",
+        };
+      })
+      .filter((t) => t.name);
+    const cleanedTravelers = [...cleanedAdults, ...cleanedChildren];
 
     const activities = values.activities || [];
-    const hasVenueActivity = ["sports_event", "concert_show", "theme_park"].some(
+    const hasVenueActivity = ["sports_event", "concert_show", "theme_park", "museums_tours"].some(
       (a) => activities.includes(a)
     );
 
@@ -381,31 +691,55 @@ export default function Home() {
           city: values.venue_input.city?.trim() || undefined,
           type_hint: values.venue_input.type_hint || undefined,
           activities: activities.filter((a) =>
-            ["sports_event", "concert_show", "theme_park"].includes(a)
+            ["sports_event", "concert_show", "theme_park", "museums_tours"].includes(a)
           ),
           known_venue_id: values.venue_input.known_venue_id?.trim() || undefined,
         }
       : undefined;
+
+    const activity_details = activities.map((key) => {
+      const detail = {
+        key,
+        label:
+          ACTIVITY_LABEL_LOOKUP[key] ||
+          key.replace(/_/g, " " ).replace(/\b\w/g, (m) => m.toUpperCase()),
+      };
+      if (
+        ["sports_event", "concert_show", "theme_park", "museums_tours"].includes(key) &&
+        values.venue_input?.name
+      ) {
+        detail.venue = {
+          name: values.venue_input.name.trim(),
+          city: values.venue_input.city?.trim() || undefined,
+          type_hint: values.venue_input.type_hint || undefined,
+        };
+      }
+      return detail;
+    });
 
     const selectedModesList = Array.isArray(values.modes)
       ? values.modes.filter(Boolean)
       : [];
     const selectedModes = selectedModesList.length ? selectedModesList : ["fly"];
     const logisticsForm = values.logistics || {};
+    const dateRangeForm = values.date_range || {};
+    const startDate = dateRangeForm.start || "";
+    const endDate = selectedModes.includes("day_trip")
+      ? startDate
+      : dateRangeForm.end || startDate;
 
     const trip_input = {
       modes: selectedModes,
       trip_type: values.trip_type,
       destination: values.destination.trim(),
-      start_date: values.start_date,
-      end_date: selectedModes.includes("day_trip")
-        ? values.start_date
-        : values.end_date || values.start_date,
+      start_date: startDate,
+      end_date: endDate,
       accommodation: values.accommodation || "",
       transportation: values.transportation || "",
       travelers: cleanedTravelers,
       context_flags: values.context_flags,
       activities,
+      activity_details,
       accessibility: values.accessibility,
       logistics: {
         ...(selectedModes.includes("fly") ? { fly: logisticsForm.fly } : {}),
@@ -548,10 +882,56 @@ export default function Home() {
 
   return (
     <main style={{ padding: 20, maxWidth: 980, margin: "0 auto", fontFamily: "system-ui, Arial" }}>
+      {showDraftBanner && (
+        <div
+          className="__no-print"
+          style={{
+            marginBottom: 16,
+            padding: "12px 16px",
+            border: "1px solid #b7d6da",
+            borderRadius: 12,
+            background: "linear-gradient(90deg, rgba(86, 144, 150, 0.08) 0%, #ffffff 100%)",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <strong>Resume your saved plan?</strong>
+            {pendingDraft?.updatedAt ? (
+              <span style={{ fontSize: 12, color: "#4b5563" }}>
+                Saved {formatTimestamp(pendingDraft.updatedAt)}
+              </span>
+            ) : (
+              <span style={{ fontSize: 12, color: "#4b5563" }}>
+                Stored locally on this device.
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="__smallbtn" onClick={handleResumeDraft}>
+              Resume
+            </button>
+            <button
+              type="button"
+              className="__smallbtn"
+              onClick={handleDiscardDraft}
+              style={{ background: "#ffffff", border: "1px solid #d1d5db", color: "#1f2937" }}
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
       <h1 style={{ marginBottom: 8 }}>The Fulfilled Trip Planner - Beta</h1>
       <p style={{ marginBottom: 16 }}>
-        Fill this out and submit to see your plan! We are in testing mode and welcome feedback!
+        <strong>Welcome to The Fulfilled Trip Planner!</strong>
+        <br />
+        Your go-to resource for the two weeks leading up to your trip. Stay stress-free and organized with customized packing lists, to-dos, and reminders tailored just for you. Simply enter your details and click "Create Trip Plan" to get started. We are still testing and welcome feedback at rachel@thefulfilledhustle.com!
       </p>
+
 
       <form onSubmit={handleSubmit(onSubmit)}>
         {/* Travel Modes */}
@@ -639,42 +1019,44 @@ export default function Home() {
               <label style={label}>Destination</label>
               <input
                 placeholder="City, State/Country"
-                list="dest-options"
                 {...register("destination", { required: true })}
                 style={input}
               />
-              <datalist id="dest-options">
-                {destSuggestions.map((s, i) => (
-                  <option key={i} value={s} />
-                ))}
-              </datalist>
               {errors.destination && (
                 <div style={{ color: "crimson" }}>Destination is required.</div>
               )}
             </div>
 
             <div style={field}>
-              <label style={label}>Start Date</label>
-              <input type="date" {...register("start_date", { required: true })} style={input} />
-              {errors.start_date && (
-                <div style={{ color: "crimson" }}>Start date is required.</div>
-              )}
-            </div>
-
-            <div style={field}>
-              <label style={label}>{dayTripSelected ? "Date (Same Day)" : "End Date"}</label>
-              <input
-                type="date"
-                {...register("end_date", { required: !dayTripSelected })}
-                style={input}
-                disabled={dayTripSelected}
-                min={endMin}
+              <label style={label}>{dayTripSelected ? "Trip Date" : "Trip Dates"}</label>
+              <Controller
+                control={control}
+                name="date_range"
+                rules={{
+                  validate: (value) => {
+                    const startValue = value?.start || "";
+                    const endValue = dayTripSelected ? startValue : value?.end || "";
+                    if (!startValue) return "Start date is required.";
+                    if (!dayTripSelected && !endValue) return "End date is required.";
+                    if (!dayTripSelected && endValue < startValue) return "End date can't be before start date.";
+                    return true;
+                  },
+                }}
+                render={({ field }) => (
+                  <DateRangePicker
+                    start={field.value?.start}
+                    end={field.value?.end}
+                    singleDay={dayTripSelected}
+                    disabled={loadingWx}
+                    onChange={({ start, end }) => {
+                      const next = { start, end: dayTripSelected ? start : end };
+                      field.onChange(next);
+                    }}
+                  />
+                )}
               />
-              {!dayTripSelected && errors.end_date && (
-                <div style={{ color: "crimson" }}>End date is required.</div>
-              )}
-              {!dayTripSelected && start && end && end < start && (
-                <div style={{ color: "crimson" }}>End date can’t be before start date.</div>
+              {errors?.date_range?.message && (
+                <div style={{ color: "crimson" }}>{errors.date_range.message}</div>
               )}
             </div>
           </div>
@@ -707,58 +1089,106 @@ export default function Home() {
         <section style={card}>
           <div style={{ marginBottom: 10, fontWeight: 700 }}>Travelers</div>
           <div style={row}>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
-              <input type="checkbox" {...register("context_flags.traveling_solo")} /> I’m traveling solo
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}
+            >
+              <input type="checkbox" {...register("context_flags.traveling_solo")} /> I am traveling solo
             </label>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
-              <input type="checkbox" {...register("context_flags.single_parent")} /> I’m a single parent
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}
+            >
+              <input type="checkbox" {...register("context_flags.single_parent")} /> I am a single parent
+            </label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}
+            >
+              <input type="checkbox" {...register("context_flags.traveling_with_friends")} /> Traveling with friends
             </label>
           </div>
 
-          {fields.map((fieldItem, idx) => (
-            <div key={fieldItem.id} style={{ ...row, marginTop: 10, alignItems: "flex-end" }}>
-              <div style={field}>
-                <label style={label}>Name</label>
-                <input
-                  placeholder="Name"
-                  {...register(`travelers.${idx}.name`, { required: false })}
-                  style={input}
-                />
-              </div>
-              <div style={field}>
-                <label style={label}>Age</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Age"
-                  {...register(`travelers.${idx}.age`)}
-                  style={input}
-                />
-              </div>
-              <div style={field}>
-                <label style={label}>Type</label>
-                <select {...register(`travelers.${idx}.type`)} style={input}>
-                  <option value="adult">Adult</option>
-                  <option value="child">Child</option>
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(idx)}
-                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}
-              >
-                Remove
-              </button>
+          <div style={{ ...row, marginTop: 12 }}>
+            <div style={field}>
+              <label style={label}>Adults</label>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                {...register("traveler_counts.adults", {
+                  onBlur: (event) => {
+                    const value = Number(event.target.value);
+                    const next = Number.isFinite(value) ? Math.min(10, Math.max(0, value)) : 0;
+                    setValue("traveler_counts.adults", String(next));
+                  },
+                })}
+                style={input}
+              />
             </div>
-          ))}
+            <div style={field}>
+              <label style={label}>Children</label>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                {...register("traveler_counts.children", {
+                  onBlur: (event) => {
+                    const value = Number(event.target.value);
+                    const next = Number.isFinite(value) ? Math.min(10, Math.max(0, value)) : 0;
+                    setValue("traveler_counts.children", String(next));
+                  },
+                })}
+                style={input}
+              />
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => append({ name: "", age: "", type: "adult" })}
-            style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd" }}
-          >
-            + Add Traveler
-          </button>
+          {adultFields.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Adult Details</div>
+              {adultFields.map((fieldItem, idx) => (
+                <div
+                  key={fieldItem.id || idx}
+                  style={{ ...row, alignItems: "flex-end", marginBottom: 8 }}
+                >
+                  <div style={field}>
+                    <label style={label}>Name</label>
+                    <input
+                      placeholder={`Adult ${idx + 1}`}
+                      {...register(`adult_travelers.${idx}.name`)}
+                      style={input}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {childFields.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Child Details</div>
+              {childFields.map((fieldItem, idx) => (
+                <div
+                  key={fieldItem.id || idx}
+                  style={{ ...row, alignItems: "flex-end", marginBottom: 8 }}
+                >
+                  <div style={field}>
+                    <label style={label}>Name</label>
+                    <input
+                      placeholder={`Child ${idx + 1}`}
+                      {...register(`child_travelers.${idx}.name`)}
+                      style={input}
+                    />
+                  </div>
+                  <div style={field}>
+                    <label style={label}>Age</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Age"
+                      {...register(`child_travelers.${idx}.age`)}
+                      style={input}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Logistics (dynamic) */}
@@ -772,45 +1202,50 @@ export default function Home() {
                 <Controller
                   control={control}
                   name="logistics.fly.departure_airport"
-                  rules={{ required: true }}
+                  rules={{
+                    validate: (value) =>
+                      !includesMode("fly") || value
+                        ? true
+                        : "Departure airport is required.",
+                  }}
                   render={({ field }) => (
-                    <>
-                      <input
-                        {...field}
-                        list="airport-options"
-                        placeholder="Start typing an airport code or name"
-                        value={airportQuery}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setAirportQuery(v);
-                          field.onChange(v);
-                        }}
-                        onBlur={field.onBlur}
-                        style={input}
-                      />
-                      <datalist id="airport-options">
-                        {airportOptions.map((opt, idx) => {
-                          const locationBits = [opt?.city, opt?.state, opt?.country].filter(Boolean).join(", ");
-                          const label = [
-                            opt?.iata || opt?.icao || null,
-                            opt?.name || null,
-                            locationBits ? `(${locationBits})` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" ");
-                          const value = opt?.iata || opt?.icao || opt?.name || "";
-                          return (
-                            <option
-                              key={`airport-${opt?.iata || opt?.icao || idx}`}
-                              value={value}
-                              label={label}
-                            />
-                          );
-                        })}
-                      </datalist>
-                    </>
+                    <select
+                      {...field}
+                      value={field.value || ""}
+                      style={input}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        field.onChange(code);
+                        const baseMatch = code
+                          ? POPULAR_AIRPORTS.find((opt) => opt.code === code) || null
+                          : null;
+                        const match = baseMatch
+                          ? { ...baseMatch, summary: formatAirportSummary(baseMatch) }
+                          : null;
+                        setValue("logistics.fly.departure_airport_details", match, {
+                          shouldDirty: true,
+                        });
+                      }}
+                    >
+                      <option value="">Select an airport</option>
+                      {POPULAR_AIRPORTS.map((opt) => (
+                        <option key={opt.code} value={opt.code}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   )}
                 />
+                {errors?.logistics?.fly?.departure_airport?.message && (
+                  <div style={{ color: "crimson" }}>
+                    {errors.logistics.fly.departure_airport.message}
+                  </div>
+                )}
+                {departureAirportDetails && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: "#4b5563" }}>
+                    {formatAirportSummary(departureAirportDetails)}
+                  </div>
+                )}
               </div>
               <div style={field}>
                 <label style={label}>Airline</label>
@@ -830,6 +1265,9 @@ export default function Home() {
               </div>
             </div>
           )}
+
+
+
 
           {includesMode("drive") && (
             <div style={row}>
@@ -925,10 +1363,10 @@ export default function Home() {
           {accommodation === "hotel" && (
             <div style={{ ...row, marginTop: 12 }}>
               <div style={field}>
-                <label style={label}>Hotel Name</label>
+                <label style={label}>Hotel Name (select from drop down)</label>
                 <input
                   list="hotel-options"
-                  placeholder="Start typing your hotel…"
+                  placeholder="Hotel name"
                   value={hotelQuery}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -1069,7 +1507,7 @@ export default function Home() {
                 <label style={label}>Notes</label>
                 <textarea
                   rows={3}
-                  placeholder="Any details you'd like us to account for…"
+                  placeholder="Any details you'd like us to account for..."
                   {...register("accessibility.notes")}
                   style={{ ...input, height: 90 }}
                 />
@@ -1079,10 +1517,11 @@ export default function Home() {
         </section>
 
         {/* Submit */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <button
             type="submit"
             disabled={loadingWx}
+            aria-live="polite"
             style={{
               padding: "10px 16px",
               borderRadius: 10,
@@ -1094,24 +1533,28 @@ export default function Home() {
               opacity: loadingWx ? 0.8 : 1,
             }}
           >
-            {loadingWx ? currentLoadingMessage : "?? Create My Trip Prep Plan"}
+            {loadingWx ? currentLoadingMessage : "Create My Trip Prep Plan"}
           </button>
-
-          {loadingWx && <span aria-live="polite">{currentLoadingMessage}</span>}
           {errorWx && <span style={{ color: "crimson" }}>{errorWx}</span>}
         </div>
       </form>
 
       {/* Plan UI */}
-      {submitted?._plan && (
-        <PlanPreview
-          plan={submitted._plan}
-          ai={submitted.ai}          // <- passes AI to the preview
-          loadingAi={submitted?.ai?.status === "loading"}
-        />
-      )}
+      <div ref={planSectionRef}>
+        {submitted?._plan && (
+          <PlanPreview
+            plan={submitted._plan}
+            ai={submitted.ai}          // <- passes AI to the preview
+            loadingAi={submitted?.ai?.status === "loading"}
+            onManualSave={handleManualSave}
+            onClearSavedDraft={handleClearSavedDraft}
+            saveStatusText={saveStatusText}
+            saveStatusColor={saveStatusColor}
+          />
+        )}
+      </div>
 
-      {/* (Optional) Debug payload – visible only if NEXT_PUBLIC_SHOW_DEBUG="1" */}
+      {/* (Optional) Debug payload - visible only if NEXT_PUBLIC_SHOW_DEBUG="1" */}
       {process.env.NEXT_PUBLIC_SHOW_DEBUG === "1" && submitted && (
         <section style={{ ...card, marginTop: 16 }}>
           <div style={{ marginBottom: 8, fontWeight: 700 }}>Preview Payload</div>
@@ -1132,3 +1575,30 @@ export default function Home() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

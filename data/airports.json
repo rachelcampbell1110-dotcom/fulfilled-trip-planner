@@ -1,474 +1,1306 @@
 [
     {
-        "city":  "Atlanta",
-        "iata":  "ATL",
-        "icao":  "KATL",
-        "name":  "Hartsfield-Jackson Atlanta International Airport",
-        "state":  "Georgia",
-        "country":  "United States"
+        "city": "Buenos Aires",
+        "iata": "EZE",
+        "icao": "SAEZ",
+        "name": "Ministro Pistarini International Airport",
+        "state": "",
+        "country": "Argentina"
     },
     {
-        "city":  "Beijing",
-        "iata":  "PEK",
-        "icao":  "ZBAA",
-        "name":  "Beijing Capital International Airport",
-        "state":  "",
-        "country":  "China"
+        "city": "Sydney",
+        "iata": "SYD",
+        "icao": "YSSY",
+        "name": "Sydney Kingsford Smith Airport",
+        "state": "New South Wales",
+        "country": "Australia"
     },
     {
-        "city":  "Dubai",
-        "iata":  "DXB",
-        "icao":  "OMDB",
-        "name":  "Dubai International Airport",
-        "state":  "",
-        "country":  "United Arab Emirates"
+        "city": "Melbourne",
+        "iata": "MEL",
+        "icao": "YMML",
+        "name": "Melbourne Airport",
+        "state": "Victoria",
+        "country": "Australia"
     },
     {
-        "city":  "Los Angeles",
-        "iata":  "LAX",
-        "icao":  "KLAX",
-        "name":  "Los Angeles International Airport",
-        "state":  "California",
-        "country":  "United States"
+        "city": "Vienna",
+        "iata": "VIE",
+        "icao": "LOWW",
+        "name": "Vienna International Airport",
+        "state": "",
+        "country": "Austria"
     },
     {
-        "city":  "Tokyo",
-        "iata":  "HND",
-        "icao":  "RJTT",
-        "name":  "Tokyo Haneda Airport",
-        "state":  "",
-        "country":  "Japan"
+        "city": "Brussels",
+        "iata": "BRU",
+        "icao": "EBBR",
+        "name": "Brussels Airport",
+        "state": "",
+        "country": "Belgium"
     },
     {
-        "city":  "Chicago",
-        "iata":  "ORD",
-        "icao":  "KORD",
-        "name":  "Chicago O\u0027Hare International Airport",
-        "state":  "Illinois",
-        "country":  "United States"
+        "city": "Sao Paulo",
+        "iata": "GRU",
+        "icao": "SBGR",
+        "name": "Sao Paulo/Guarulhos International Airport",
+        "state": "",
+        "country": "Brazil"
     },
     {
-        "city":  "London",
-        "iata":  "LHR",
-        "icao":  "EGLL",
-        "name":  "London Heathrow Airport",
-        "state":  "",
-        "country":  "United Kingdom"
+        "city": "Vancouver",
+        "iata": "YVR",
+        "icao": "CYVR",
+        "name": "Vancouver International Airport",
+        "state": "British Columbia",
+        "country": "Canada"
     },
     {
-        "city":  "Shanghai",
-        "iata":  "PVG",
-        "icao":  "ZSPD",
-        "name":  "Shanghai Pudong International Airport",
-        "state":  "",
-        "country":  "China"
+        "city": "Toronto",
+        "iata": "YYZ",
+        "icao": "CYYZ",
+        "name": "Toronto Pearson International Airport",
+        "state": "Ontario",
+        "country": "Canada"
     },
     {
-        "city":  "Paris",
-        "iata":  "CDG",
-        "icao":  "LFPG",
-        "name":  "Paris Charles de Gaulle Airport",
-        "state":  "",
-        "country":  "France"
+        "city": "Santiago",
+        "iata": "SCL",
+        "icao": "SCEL",
+        "name": "Arturo Merino Benitez International Airport",
+        "state": "",
+        "country": "Chile"
     },
     {
-        "city":  "Dallas-Fort Worth",
-        "iata":  "DFW",
-        "icao":  "KDFW",
-        "name":  "Dallas/Fort Worth International Airport",
-        "state":  "Texas",
-        "country":  "United States"
+        "city": "Beijing",
+        "iata": "PEK",
+        "icao": "ZBAA",
+        "name": "Beijing Capital International Airport",
+        "state": "",
+        "country": "China"
     },
     {
-        "city":  "Guangzhou",
-        "iata":  "CAN",
-        "icao":  "ZGGG",
-        "name":  "Guangzhou Baiyun International Airport",
-        "state":  "",
-        "country":  "China"
+        "city": "Guangzhou",
+        "iata": "CAN",
+        "icao": "ZGGG",
+        "name": "Guangzhou Baiyun International Airport",
+        "state": "",
+        "country": "China"
     },
     {
-        "city":  "Amsterdam",
-        "iata":  "AMS",
-        "icao":  "EHAM",
-        "name":  "Amsterdam Airport Schiphol",
-        "state":  "",
-        "country":  "Netherlands"
+        "city": "Shanghai",
+        "iata": "PVG",
+        "icao": "ZSPD",
+        "name": "Shanghai Pudong International Airport",
+        "state": "",
+        "country": "China"
     },
     {
-        "city":  "Madrid",
-        "iata":  "MAD",
-        "icao":  "LEMD",
-        "name":  "Adolfo Suárez Madrid-Barajas Airport",
-        "state":  "",
-        "country":  "Spain"
+        "city": "Copenhagen",
+        "iata": "CPH",
+        "icao": "EKCH",
+        "name": "Copenhagen Airport",
+        "state": "",
+        "country": "Denmark"
     },
     {
-        "city":  "Frankfurt",
-        "iata":  "FRA",
-        "icao":  "EDDF",
-        "name":  "Frankfurt Airport",
-        "state":  "",
-        "country":  "Germany"
+        "city": "Cairo",
+        "iata": "CAI",
+        "icao": "HECA",
+        "name": "Cairo International Airport",
+        "state": "",
+        "country": "Egypt"
     },
     {
-        "city":  "Istanbul",
-        "iata":  "IST",
-        "icao":  "LTFM",
-        "name":  "Istanbul Airport",
-        "state":  "",
-        "country":  "Turkey"
+        "city": "Helsinki",
+        "iata": "HEL",
+        "icao": "EFHK",
+        "name": "Helsinki-Vantaa Airport",
+        "state": "",
+        "country": "Finland"
     },
     {
-        "city":  "Singapore",
-        "iata":  "SIN",
-        "icao":  "WSSS",
-        "name":  "Singapore Changi Airport",
-        "state":  "",
-        "country":  "Singapore"
+        "city": "Paris",
+        "iata": "CDG",
+        "icao": "LFPG",
+        "name": "Paris Charles de Gaulle Airport",
+        "state": "",
+        "country": "France"
     },
     {
-        "city":  "Incheon",
-        "iata":  "ICN",
-        "icao":  "RKSI",
-        "name":  "Incheon International Airport",
-        "state":  "",
-        "country":  "South Korea"
+        "city": "Frankfurt",
+        "iata": "FRA",
+        "icao": "EDDF",
+        "name": "Frankfurt Airport",
+        "state": "",
+        "country": "Germany"
     },
     {
-        "city":  "Denver",
-        "iata":  "DEN",
-        "icao":  "KDEN",
-        "name":  "Denver International Airport",
-        "state":  "Colorado",
-        "country":  "United States"
+        "city": "Hong Kong",
+        "iata": "HKG",
+        "icao": "VHHH",
+        "name": "Hong Kong International Airport",
+        "state": "",
+        "country": "Hong Kong"
     },
     {
-        "city":  "New York City",
-        "iata":  "JFK",
-        "icao":  "KJFK",
-        "name":  "John F. Kennedy International Airport",
-        "state":  "New York",
-        "country":  "United States"
+        "city": "Delhi",
+        "iata": "DEL",
+        "icao": "VIDP",
+        "name": "Indira Gandhi International Airport",
+        "state": "",
+        "country": "India"
     },
     {
-        "city":  "San Francisco",
-        "iata":  "SFO",
-        "icao":  "KSFO",
-        "name":  "San Francisco International Airport",
-        "state":  "California",
-        "country":  "United States"
+        "city": "Mumbai",
+        "iata": "BOM",
+        "icao": "VABB",
+        "name": "Chhatrapati Shivaji Maharaj International Airport",
+        "state": "",
+        "country": "India"
     },
     {
-        "city":  "Seattle",
-        "iata":  "SEA",
-        "icao":  "KSEA",
-        "name":  "Seattle-Tacoma International Airport",
-        "state":  "Washington",
-        "country":  "United States"
+        "city": "Dublin",
+        "iata": "DUB",
+        "icao": "EIDW",
+        "name": "Dublin Airport",
+        "state": "",
+        "country": "Ireland"
     },
     {
-        "city":  "Miami",
-        "iata":  "MIA",
-        "icao":  "KMIA",
-        "name":  "Miami International Airport",
-        "state":  "Florida",
-        "country":  "United States"
+        "city": "Milan",
+        "iata": "MXP",
+        "icao": "LIMC",
+        "name": "Milan Malpensa Airport",
+        "state": "",
+        "country": "Italy"
     },
     {
-        "city":  "Boston",
-        "iata":  "BOS",
-        "icao":  "KBOS",
-        "name":  "Boston Logan International Airport",
-        "state":  "Massachusetts",
-        "country":  "United States"
+        "city": "Rome",
+        "iata": "FCO",
+        "icao": "LIRF",
+        "name": "Rome Fiumicino Airport",
+        "state": "",
+        "country": "Italy"
     },
     {
-        "city":  "Phoenix",
-        "iata":  "PHX",
-        "icao":  "KPHX",
-        "name":  "Phoenix Sky Harbor International Airport",
-        "state":  "Arizona",
-        "country":  "United States"
+        "city": "Narita",
+        "iata": "NRT",
+        "icao": "RJAA",
+        "name": "Narita International Airport",
+        "state": "",
+        "country": "Japan"
     },
     {
-        "city":  "Houston",
-        "iata":  "IAH",
-        "icao":  "KIAH",
-        "name":  "George Bush Intercontinental Airport",
-        "state":  "Texas",
-        "country":  "United States"
+        "city": "Osaka",
+        "iata": "KIX",
+        "icao": "RJBB",
+        "name": "Kansai International Airport",
+        "state": "",
+        "country": "Japan"
     },
     {
-        "city":  "Minneapolis",
-        "iata":  "MSP",
-        "icao":  "KMSP",
-        "name":  "Minneapolis–Saint Paul International Airport",
-        "state":  "Minnesota",
-        "country":  "United States"
+        "city": "Tokyo",
+        "iata": "HND",
+        "icao": "RJTT",
+        "name": "Tokyo Haneda Airport",
+        "state": "",
+        "country": "Japan"
     },
     {
-        "city":  "Detroit",
-        "iata":  "DTW",
-        "icao":  "KDTW",
-        "name":  "Detroit Metropolitan Wayne County Airport",
-        "state":  "Michigan",
-        "country":  "United States"
+        "city": "Mexico City",
+        "iata": "MEX",
+        "icao": "MMMX",
+        "name": "Mexico City International Airport",
+        "state": "",
+        "country": "Mexico"
     },
     {
-        "city":  "Charlotte",
-        "iata":  "CLT",
-        "icao":  "KCLT",
-        "name":  "Charlotte Douglas International Airport",
-        "state":  "North Carolina",
-        "country":  "United States"
+        "city": "Amsterdam",
+        "iata": "AMS",
+        "icao": "EHAM",
+        "name": "Amsterdam Airport Schiphol",
+        "state": "",
+        "country": "Netherlands"
     },
     {
-        "city":  "Newark",
-        "iata":  "EWR",
-        "icao":  "KEWR",
-        "name":  "Newark Liberty International Airport",
-        "state":  "New Jersey",
-        "country":  "United States"
+        "city": "Auckland",
+        "iata": "AKL",
+        "icao": "NZAA",
+        "name": "Auckland Airport",
+        "state": "",
+        "country": "New Zealand"
     },
     {
-        "city":  "Toronto",
-        "iata":  "YYZ",
-        "icao":  "CYYZ",
-        "name":  "Toronto Pearson International Airport",
-        "state":  "Ontario",
-        "country":  "Canada"
+        "city": "Oslo",
+        "iata": "OSL",
+        "icao": "ENGM",
+        "name": "Oslo Gardermoen Airport",
+        "state": "",
+        "country": "Norway"
     },
     {
-        "city":  "Vancouver",
-        "iata":  "YVR",
-        "icao":  "CYVR",
-        "name":  "Vancouver International Airport",
-        "state":  "British Columbia",
-        "country":  "Canada"
+        "city": "Lisbon",
+        "iata": "LIS",
+        "icao": "LPPT",
+        "name": "Lisbon Humberto Delgado Airport",
+        "state": "",
+        "country": "Portugal"
     },
     {
-        "city":  "Mexico City",
-        "iata":  "MEX",
-        "icao":  "MMMX",
-        "name":  "Mexico City International Airport",
-        "state":  "",
-        "country":  "Mexico"
+        "city": "Doha",
+        "iata": "DOH",
+        "icao": "OTHH",
+        "name": "Hamad International Airport",
+        "state": "",
+        "country": "Qatar"
     },
     {
-        "city":  "São Paulo",
-        "iata":  "GRU",
-        "icao":  "SBGR",
-        "name":  "São Paulo/Guarulhos International Airport",
-        "state":  "",
-        "country":  "Brazil"
+        "city": "Singapore",
+        "iata": "SIN",
+        "icao": "WSSS",
+        "name": "Singapore Changi Airport",
+        "state": "",
+        "country": "Singapore"
     },
     {
-        "city":  "Buenos Aires",
-        "iata":  "EZE",
-        "icao":  "SAEZ",
-        "name":  "Ministro Pistarini International Airport",
-        "state":  "",
-        "country":  "Argentina"
+        "city": "Johannesburg",
+        "iata": "JNB",
+        "icao": "FAOR",
+        "name": "O. R. Tambo International Airport",
+        "state": "",
+        "country": "South Africa"
     },
     {
-        "city":  "Santiago",
-        "iata":  "SCL",
-        "icao":  "SCEL",
-        "name":  "Arturo Merino Benítez International Airport",
-        "state":  "",
-        "country":  "Chile"
+        "city": "Incheon",
+        "iata": "ICN",
+        "icao": "RKSI",
+        "name": "Incheon International Airport",
+        "state": "",
+        "country": "South Korea"
     },
     {
-        "city":  "Sydney",
-        "iata":  "SYD",
-        "icao":  "YSSY",
-        "name":  "Sydney Kingsford Smith Airport",
-        "state":  "New South Wales",
-        "country":  "Australia"
+        "city": "Barcelona",
+        "iata": "BCN",
+        "icao": "LEBL",
+        "name": "BarcelonaEl Prat Airport",
+        "state": "",
+        "country": "Spain"
     },
     {
-        "city":  "Melbourne",
-        "iata":  "MEL",
-        "icao":  "YMML",
-        "name":  "Melbourne Airport",
-        "state":  "Victoria",
-        "country":  "Australia"
+        "city": "Madrid",
+        "iata": "MAD",
+        "icao": "LEMD",
+        "name": "Adolfo Suarez Madrid-Barajas Airport",
+        "state": "",
+        "country": "Spain"
     },
     {
-        "city":  "Auckland",
-        "iata":  "AKL",
-        "icao":  "NZAA",
-        "name":  "Auckland Airport",
-        "state":  "",
-        "country":  "New Zealand"
+        "city": "Stockholm",
+        "iata": "ARN",
+        "icao": "ESSA",
+        "name": "Stockholm Arlanda Airport",
+        "state": "",
+        "country": "Sweden"
     },
     {
-        "city":  "Dublin",
-        "iata":  "DUB",
-        "icao":  "EIDW",
-        "name":  "Dublin Airport",
-        "state":  "",
-        "country":  "Ireland"
+        "city": "Zurich",
+        "iata": "ZRH",
+        "icao": "LSZH",
+        "name": "Zurich Airport",
+        "state": "",
+        "country": "Switzerland"
     },
     {
-        "city":  "Zurich",
-        "iata":  "ZRH",
-        "icao":  "LSZH",
-        "name":  "Zurich Airport",
-        "state":  "",
-        "country":  "Switzerland"
+        "city": "Bangkok",
+        "iata": "BKK",
+        "icao": "VTBS",
+        "name": "Suvarnabhumi Airport",
+        "state": "",
+        "country": "Thailand"
     },
     {
-        "city":  "Vienna",
-        "iata":  "VIE",
-        "icao":  "LOWW",
-        "name":  "Vienna International Airport",
-        "state":  "",
-        "country":  "Austria"
+        "city": "Istanbul",
+        "iata": "IST",
+        "icao": "LTFM",
+        "name": "Istanbul Airport",
+        "state": "",
+        "country": "Turkey"
     },
     {
-        "city":  "Barcelona",
-        "iata":  "BCN",
-        "icao":  "LEBL",
-        "name":  "Barcelona–El Prat Airport",
-        "state":  "",
-        "country":  "Spain"
+        "city": "Dubai",
+        "iata": "DXB",
+        "icao": "OMDB",
+        "name": "Dubai International Airport",
+        "state": "",
+        "country": "United Arab Emirates"
     },
     {
-        "city":  "Narita",
-        "iata":  "NRT",
-        "icao":  "RJAA",
-        "name":  "Narita International Airport",
-        "state":  "",
-        "country":  "Japan"
+        "city": "London",
+        "iata": "LHR",
+        "icao": "EGLL",
+        "name": "London Heathrow Airport",
+        "state": "",
+        "country": "United Kingdom"
     },
     {
-        "city":  "Osaka",
-        "iata":  "KIX",
-        "icao":  "RJBB",
-        "name":  "Kansai International Airport",
-        "state":  "",
-        "country":  "Japan"
+        "city": "Birmingham",
+        "iata": "BHM",
+        "icao": "KBHM",
+        "name": "Birmingham-Shuttlesworth International Airport",
+        "state": "Alabama",
+        "country": "United States"
     },
     {
-        "city":  "Hong Kong",
-        "iata":  "HKG",
-        "icao":  "VHHH",
-        "name":  "Hong Kong International Airport",
-        "state":  "",
-        "country":  "Hong Kong"
+        "city": "Huntsville",
+        "iata": "HSV",
+        "icao": "KHSV",
+        "name": "Huntsville International Airport",
+        "state": "Alabama",
+        "country": "United States"
     },
     {
-        "city":  "Bangkok",
-        "iata":  "BKK",
-        "icao":  "VTBS",
-        "name":  "Suvarnabhumi Airport",
-        "state":  "",
-        "country":  "Thailand"
+        "city": "Anchorage",
+        "iata": "ANC",
+        "icao": "PANC",
+        "name": "Ted Stevens Anchorage International Airport",
+        "state": "Alaska",
+        "country": "United States"
     },
     {
-        "city":  "Delhi",
-        "iata":  "DEL",
-        "icao":  "VIDP",
-        "name":  "Indira Gandhi International Airport",
-        "state":  "",
-        "country":  "India"
+        "city": "Fairbanks",
+        "iata": "FAI",
+        "icao": "PAFA",
+        "name": "Fairbanks International Airport",
+        "state": "Alaska",
+        "country": "United States"
     },
     {
-        "city":  "Mumbai",
-        "iata":  "BOM",
-        "icao":  "VABB",
-        "name":  "Chhatrapati Shivaji Maharaj International Airport",
-        "state":  "",
-        "country":  "India"
+        "city": "Juneau",
+        "iata": "JNU",
+        "icao": "PAJN",
+        "name": "Juneau International Airport",
+        "state": "Alaska",
+        "country": "United States"
     },
     {
-        "city":  "Johannesburg",
-        "iata":  "JNB",
-        "icao":  "FAOR",
-        "name":  "O. R. Tambo International Airport",
-        "state":  "",
-        "country":  "South Africa"
+        "city": "Phoenix",
+        "iata": "PHX",
+        "icao": "KPHX",
+        "name": "Phoenix Sky Harbor International Airport",
+        "state": "Arizona",
+        "country": "United States"
     },
     {
-        "city":  "Cairo",
-        "iata":  "CAI",
-        "icao":  "HECA",
-        "name":  "Cairo International Airport",
-        "state":  "",
-        "country":  "Egypt"
+        "city": "Tucson",
+        "iata": "TUS",
+        "icao": "KTUS",
+        "name": "Tucson International Airport",
+        "state": "Arizona",
+        "country": "United States"
     },
     {
-        "city":  "Doha",
-        "iata":  "DOH",
-        "icao":  "OTHH",
-        "name":  "Hamad International Airport",
-        "state":  "",
-        "country":  "Qatar"
+        "city": "Yuma",
+        "iata": "YUM",
+        "icao": "KYUM",
+        "name": "Yuma International Airport",
+        "state": "Arizona",
+        "country": "United States"
     },
     {
-        "city":  "Lisbon",
-        "iata":  "LIS",
-        "icao":  "LPPT",
-        "name":  "Lisbon Humberto Delgado Airport",
-        "state":  "",
-        "country":  "Portugal"
+        "city": "Little Rock",
+        "iata": "LIT",
+        "icao": "KLIT",
+        "name": "Bill and Hillary Clinton National Airport",
+        "state": "Arkansas",
+        "country": "United States"
     },
     {
-        "city":  "Oslo",
-        "iata":  "OSL",
-        "icao":  "ENGM",
-        "name":  "Oslo Gardermoen Airport",
-        "state":  "",
-        "country":  "Norway"
+        "city": "Fresno",
+        "iata": "FAT",
+        "icao": "KFAT",
+        "name": "Fresno Yosemite International Airport",
+        "state": "California",
+        "country": "United States"
     },
     {
-        "city":  "Copenhagen",
-        "iata":  "CPH",
-        "icao":  "EKCH",
-        "name":  "Copenhagen Airport",
-        "state":  "",
-        "country":  "Denmark"
+        "city": "Long Beach",
+        "iata": "LGB",
+        "icao": "KLGB",
+        "name": "Long Beach Airport",
+        "state": "California",
+        "country": "United States"
     },
     {
-        "city":  "Stockholm",
-        "iata":  "ARN",
-        "icao":  "ESSA",
-        "name":  "Stockholm Arlanda Airport",
-        "state":  "",
-        "country":  "Sweden"
+        "city": "Los Angeles",
+        "iata": "LAX",
+        "icao": "KLAX",
+        "name": "Los Angeles International Airport",
+        "state": "California",
+        "country": "United States"
     },
     {
-        "city":  "Helsinki",
-        "iata":  "HEL",
-        "icao":  "EFHK",
-        "name":  "Helsinki-Vantaa Airport",
-        "state":  "",
-        "country":  "Finland"
+        "city": "Monterey",
+        "iata": "MRY",
+        "icao": "KMRY",
+        "name": "Monterey Regional Airport",
+        "state": "California",
+        "country": "United States"
     },
     {
-        "city":  "Brussels",
-        "iata":  "BRU",
-        "icao":  "EBBR",
-        "name":  "Brussels Airport",
-        "state":  "",
-        "country":  "Belgium"
+        "city": "Oakland",
+        "iata": "OAK",
+        "icao": "KOAK",
+        "name": "Oakland International Airport",
+        "state": "California",
+        "country": "United States"
     },
     {
-        "city":  "Milan",
-        "iata":  "MXP",
-        "icao":  "LIMC",
-        "name":  "Milan Malpensa Airport",
-        "state":  "",
-        "country":  "Italy"
+        "city": "Ontario",
+        "iata": "ONT",
+        "icao": "KONT",
+        "name": "Ontario International Airport",
+        "state": "California",
+        "country": "United States"
     },
     {
-        "city":  "Rome",
-        "iata":  "FCO",
-        "icao":  "LIRF",
-        "name":  "Rome Fiumicino Airport",
-        "state":  "",
-        "country":  "Italy"
+        "city": "Sacramento",
+        "iata": "SMF",
+        "icao": "KSMF",
+        "name": "Sacramento International Airport",
+        "state": "California",
+        "country": "United States"
+    },
+    {
+        "city": "San Diego",
+        "iata": "SAN",
+        "icao": "KSAN",
+        "name": "San Diego International Airport",
+        "state": "California",
+        "country": "United States"
+    },
+    {
+        "city": "San Francisco",
+        "iata": "SFO",
+        "icao": "KSFO",
+        "name": "San Francisco International Airport",
+        "state": "California",
+        "country": "United States"
+    },
+    {
+        "city": "San Jose",
+        "iata": "SJC",
+        "icao": "KSJC",
+        "name": "San Jose Mineta International Airport",
+        "state": "California",
+        "country": "United States"
+    },
+    {
+        "city": "Santa Barbara",
+        "iata": "SBA",
+        "icao": "KSBA",
+        "name": "Santa Barbara Airport",
+        "state": "California",
+        "country": "United States"
+    },
+    {
+        "city": "Colorado Springs",
+        "iata": "COS",
+        "icao": "KCOS",
+        "name": "Colorado Springs Airport",
+        "state": "Colorado",
+        "country": "United States"
+    },
+    {
+        "city": "Denver",
+        "iata": "DEN",
+        "icao": "KDEN",
+        "name": "Denver International Airport",
+        "state": "Colorado",
+        "country": "United States"
+    },
+    {
+        "city": "Montrose",
+        "iata": "MTJ",
+        "icao": "KMTJ",
+        "name": "Montrose Regional Airport",
+        "state": "Colorado",
+        "country": "United States"
+    },
+    {
+        "city": "Hartford",
+        "iata": "BDL",
+        "icao": "KBDL",
+        "name": "Bradley International Airport",
+        "state": "Connecticut",
+        "country": "United States"
+    },
+    {
+        "city": "Fort Lauderdale",
+        "iata": "FLL",
+        "icao": "KFLL",
+        "name": "Fort Lauderdale-Hollywood International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Fort Myers",
+        "iata": "RSW",
+        "icao": "KRSW",
+        "name": "Southwest Florida International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Jacksonville",
+        "iata": "JAX",
+        "icao": "KJAX",
+        "name": "Jacksonville International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Key West",
+        "iata": "EYW",
+        "icao": "KEYW",
+        "name": "Key West International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Melbourne",
+        "iata": "MLB",
+        "icao": "KMLB",
+        "name": "Orlando Melbourne International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Miami",
+        "iata": "MIA",
+        "icao": "KMIA",
+        "name": "Miami International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Orlando",
+        "iata": "MCO",
+        "icao": "KMCO",
+        "name": "Orlando International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Palm Beach",
+        "iata": "PBI",
+        "icao": "KPBI",
+        "name": "Palm Beach International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Pensacola",
+        "iata": "PNS",
+        "icao": "KPNS",
+        "name": "Pensacola International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Sarasota",
+        "iata": "SRQ",
+        "icao": "KSRQ",
+        "name": "Sarasota-Bradenton International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Tampa",
+        "iata": "TPA",
+        "icao": "KTPA",
+        "name": "Tampa International Airport",
+        "state": "Florida",
+        "country": "United States"
+    },
+    {
+        "city": "Atlanta",
+        "iata": "ATL",
+        "icao": "KATL",
+        "name": "Hartsfield-Jackson Atlanta International Airport",
+        "state": "Georgia",
+        "country": "United States"
+    },
+    {
+        "city": "Savannah",
+        "iata": "SAV",
+        "icao": "KSAV",
+        "name": "Savannah/Hilton Head International Airport",
+        "state": "Georgia",
+        "country": "United States"
+    },
+    {
+        "city": "Honolulu",
+        "iata": "HNL",
+        "icao": "PHNL",
+        "name": "Daniel K. Inouye International Airport",
+        "state": "Hawaii",
+        "country": "United States"
+    },
+    {
+        "city": "Kahului",
+        "iata": "OGG",
+        "icao": "PHOG",
+        "name": "Kahului Airport",
+        "state": "Hawaii",
+        "country": "United States"
+    },
+    {
+        "city": "Kailua-Kona",
+        "iata": "KOA",
+        "icao": "PHKO",
+        "name": "Ellison Onizuka Kona International Airport at Keahole",
+        "state": "Hawaii",
+        "country": "United States"
+    },
+    {
+        "city": "Boise",
+        "iata": "BOI",
+        "icao": "KBOI",
+        "name": "Boise Airport",
+        "state": "Idaho",
+        "country": "United States"
+    },
+    {
+        "city": "Chicago",
+        "iata": "MDW",
+        "icao": "KMDW",
+        "name": "Chicago Midway International Airport",
+        "state": "Illinois",
+        "country": "United States"
+    },
+    {
+        "city": "Chicago",
+        "iata": "ORD",
+        "icao": "KORD",
+        "name": "Chicago O'Hare International Airport",
+        "state": "Illinois",
+        "country": "United States"
+    },
+    {
+        "city": "Moline",
+        "iata": "MLI",
+        "icao": "KMLI",
+        "name": "Quad City International Airport",
+        "state": "Illinois",
+        "country": "United States"
+    },
+    {
+        "city": "Indianapolis",
+        "iata": "IND",
+        "icao": "KIND",
+        "name": "Indianapolis International Airport",
+        "state": "Indiana",
+        "country": "United States"
+    },
+    {
+        "city": "Cedar Rapids",
+        "iata": "CID",
+        "icao": "KCID",
+        "name": "The Eastern Iowa Airport",
+        "state": "Iowa",
+        "country": "United States"
+    },
+    {
+        "city": "Des Moines",
+        "iata": "DSM",
+        "icao": "KDSM",
+        "name": "Des Moines International Airport",
+        "state": "Iowa",
+        "country": "United States"
+    },
+    {
+        "city": "Wichita",
+        "iata": "ICT",
+        "icao": "KICT",
+        "name": "Wichita Dwight D. Eisenhower National Airport",
+        "state": "Kansas",
+        "country": "United States"
+    },
+    {
+        "city": "Cincinnati",
+        "iata": "CVG",
+        "icao": "KCVG",
+        "name": "Cincinnati/Northern Kentucky International Airport",
+        "state": "Kentucky",
+        "country": "United States"
+    },
+    {
+        "city": "Lexington",
+        "iata": "LEX",
+        "icao": "KLEX",
+        "name": "Blue Grass Airport",
+        "state": "Kentucky",
+        "country": "United States"
+    },
+    {
+        "city": "Louisville",
+        "iata": "SDF",
+        "icao": "KSDF",
+        "name": "Louisville Muhammad Ali International Airport",
+        "state": "Kentucky",
+        "country": "United States"
+    },
+    {
+        "city": "New Orleans",
+        "iata": "MSY",
+        "icao": "KMSY",
+        "name": "Louis Armstrong New Orleans International Airport",
+        "state": "Louisiana",
+        "country": "United States"
+    },
+    {
+        "city": "Bangor",
+        "iata": "BGR",
+        "icao": "KBGR",
+        "name": "Bangor International Airport",
+        "state": "Maine",
+        "country": "United States"
+    },
+    {
+        "city": "Portland",
+        "iata": "PWM",
+        "icao": "KPWM",
+        "name": "Portland International Jetport",
+        "state": "Maine",
+        "country": "United States"
+    },
+    {
+        "city": "Baltimore",
+        "iata": "BWI",
+        "icao": "KBWI",
+        "name": "Baltimore/Washington International Thurgood Marshall Airport",
+        "state": "Maryland",
+        "country": "United States"
+    },
+    {
+        "city": "Boston",
+        "iata": "BOS",
+        "icao": "KBOS",
+        "name": "Boston Logan International Airport",
+        "state": "Massachusetts",
+        "country": "United States"
+    },
+    {
+        "city": "Detroit",
+        "iata": "DTW",
+        "icao": "KDTW",
+        "name": "Detroit Metropolitan Wayne County Airport",
+        "state": "Michigan",
+        "country": "United States"
+    },
+    {
+        "city": "Flint",
+        "iata": "FNT",
+        "icao": "KFNT",
+        "name": "Bishop International Airport",
+        "state": "Michigan",
+        "country": "United States"
+    },
+    {
+        "city": "Grand Rapids",
+        "iata": "GRR",
+        "icao": "KGRR",
+        "name": "Gerald R. Ford International Airport",
+        "state": "Michigan",
+        "country": "United States"
+    },
+    {
+        "city": "Lansing",
+        "iata": "LAN",
+        "icao": "KLAN",
+        "name": "Capital Region International Airport",
+        "state": "Michigan",
+        "country": "United States"
+    },
+    {
+        "city": "Minneapolis",
+        "iata": "MSP",
+        "icao": "KMSP",
+        "name": "MinneapolisSaint Paul International Airport",
+        "state": "Minnesota",
+        "country": "United States"
+    },
+    {
+        "city": "Gulfport",
+        "iata": "GPT",
+        "icao": "KGPT",
+        "name": "Gulfport-Biloxi International Airport",
+        "state": "Mississippi",
+        "country": "United States"
+    },
+    {
+        "city": "Jackson",
+        "iata": "JAN",
+        "icao": "KJAN",
+        "name": "Jackson-Medgar Wiley Evers International Airport",
+        "state": "Mississippi",
+        "country": "United States"
+    },
+    {
+        "city": "Kansas City",
+        "iata": "MCI",
+        "icao": "KMCI",
+        "name": "Kansas City International Airport",
+        "state": "Missouri",
+        "country": "United States"
+    },
+    {
+        "city": "Springfield",
+        "iata": "SGF",
+        "icao": "KSGF",
+        "name": "Springfield-Branson National Airport",
+        "state": "Missouri",
+        "country": "United States"
+    },
+    {
+        "city": "St. Louis",
+        "iata": "STL",
+        "icao": "KSTL",
+        "name": "St. Louis Lambert International Airport",
+        "state": "Missouri",
+        "country": "United States"
+    },
+    {
+        "city": "Billings",
+        "iata": "BIL",
+        "icao": "KBIL",
+        "name": "Billings Logan International Airport",
+        "state": "Montana",
+        "country": "United States"
+    },
+    {
+        "city": "Omaha",
+        "iata": "OMA",
+        "icao": "KOMA",
+        "name": "Eppley Airfield",
+        "state": "Nebraska",
+        "country": "United States"
+    },
+    {
+        "city": "Las Vegas",
+        "iata": "LAS",
+        "icao": "KLAS",
+        "name": "Harry Reid International Airport",
+        "state": "Nevada",
+        "country": "United States"
+    },
+    {
+        "city": "Reno",
+        "iata": "RNO",
+        "icao": "KRNO",
+        "name": "Reno-Tahoe International Airport",
+        "state": "Nevada",
+        "country": "United States"
+    },
+    {
+        "city": "Atlantic City",
+        "iata": "ACY",
+        "icao": "KACY",
+        "name": "Atlantic City International Airport",
+        "state": "New Jersey",
+        "country": "United States"
+    },
+    {
+        "city": "Newark",
+        "iata": "EWR",
+        "icao": "KEWR",
+        "name": "Newark Liberty International Airport",
+        "state": "New Jersey",
+        "country": "United States"
+    },
+    {
+        "city": "Albuquerque",
+        "iata": "ABQ",
+        "icao": "KABQ",
+        "name": "Albuquerque International Sunport",
+        "state": "New Mexico",
+        "country": "United States"
+    },
+    {
+        "city": "Albany",
+        "iata": "ALB",
+        "icao": "KALB",
+        "name": "Albany International Airport",
+        "state": "New York",
+        "country": "United States"
+    },
+    {
+        "city": "Buffalo",
+        "iata": "BUF",
+        "icao": "KBUF",
+        "name": "Buffalo Niagara International Airport",
+        "state": "New York",
+        "country": "United States"
+    },
+    {
+        "city": "New York City",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "name": "John F. Kennedy International Airport",
+        "state": "New York",
+        "country": "United States"
+    },
+    {
+        "city": "Rochester",
+        "iata": "ROC",
+        "icao": "KROC",
+        "name": "Frederick Douglass Greater Rochester International Airport",
+        "state": "New York",
+        "country": "United States"
+    },
+    {
+        "city": "Syracuse",
+        "iata": "SYR",
+        "icao": "KSYR",
+        "name": "Syracuse Hancock International Airport",
+        "state": "New York",
+        "country": "United States"
+    },
+    {
+        "city": "Charlotte",
+        "iata": "CLT",
+        "icao": "KCLT",
+        "name": "Charlotte Douglas International Airport",
+        "state": "North Carolina",
+        "country": "United States"
+    },
+    {
+        "city": "Raleigh",
+        "iata": "RDU",
+        "icao": "KRDU",
+        "name": "Raleigh-Durham International Airport",
+        "state": "North Carolina",
+        "country": "United States"
+    },
+    {
+        "city": "Wilmington",
+        "iata": "ILM",
+        "icao": "KILM",
+        "name": "Wilmington International Airport",
+        "state": "North Carolina",
+        "country": "United States"
+    },
+    {
+        "city": "Fargo",
+        "iata": "FAR",
+        "icao": "KFAR",
+        "name": "Hector International Airport",
+        "state": "North Dakota",
+        "country": "United States"
+    },
+    {
+        "city": "Cleveland",
+        "iata": "CLE",
+        "icao": "KCLE",
+        "name": "Cleveland Hopkins International Airport",
+        "state": "Ohio",
+        "country": "United States"
+    },
+    {
+        "city": "Columbus",
+        "iata": "CMH",
+        "icao": "KCMH",
+        "name": "John Glenn Columbus International Airport",
+        "state": "Ohio",
+        "country": "United States"
+    },
+    {
+        "city": "Dayton",
+        "iata": "DAY",
+        "icao": "KDAY",
+        "name": "Dayton International Airport",
+        "state": "Ohio",
+        "country": "United States"
+    },
+    {
+        "city": "Oklahoma City",
+        "iata": "OKC",
+        "icao": "KOKC",
+        "name": "Will Rogers World Airport",
+        "state": "Oklahoma",
+        "country": "United States"
+    },
+    {
+        "city": "Tulsa",
+        "iata": "TUL",
+        "icao": "KTUL",
+        "name": "Tulsa International Airport",
+        "state": "Oklahoma",
+        "country": "United States"
+    },
+    {
+        "city": "Medford",
+        "iata": "MFR",
+        "icao": "KMFR",
+        "name": "Rogue Valley International-Medford Airport",
+        "state": "Oregon",
+        "country": "United States"
+    },
+    {
+        "city": "Portland",
+        "iata": "PDX",
+        "icao": "KPDX",
+        "name": "Portland International Airport",
+        "state": "Oregon",
+        "country": "United States"
+    },
+    {
+        "city": "Philadelphia",
+        "iata": "PHL",
+        "icao": "KPHL",
+        "name": "Philadelphia International Airport",
+        "state": "Pennsylvania",
+        "country": "United States"
+    },
+    {
+        "city": "Pittsburgh",
+        "iata": "PIT",
+        "icao": "KPIT",
+        "name": "Pittsburgh International Airport",
+        "state": "Pennsylvania",
+        "country": "United States"
+    },
+    {
+        "city": "San Juan",
+        "iata": "SJU",
+        "icao": "TJSJ",
+        "name": "Luis Munoz Marin International Airport",
+        "state": "Puerto Rico",
+        "country": "United States"
+    },
+    {
+        "city": "Providence",
+        "iata": "PVD",
+        "icao": "KPVD",
+        "name": "Rhode Island T. F. Green International Airport",
+        "state": "Rhode Island",
+        "country": "United States"
+    },
+    {
+        "city": "Charleston",
+        "iata": "CHS",
+        "icao": "KCHS",
+        "name": "Charleston International Airport",
+        "state": "South Carolina",
+        "country": "United States"
+    },
+    {
+        "city": "Greenville",
+        "iata": "GSP",
+        "icao": "KGSP",
+        "name": "Greenville-Spartanburg International Airport",
+        "state": "South Carolina",
+        "country": "United States"
+    },
+    {
+        "city": "Memphis",
+        "iata": "MEM",
+        "icao": "KMEM",
+        "name": "Memphis International Airport",
+        "state": "Tennessee",
+        "country": "United States"
+    },
+    {
+        "city": "Nashville",
+        "iata": "BNA",
+        "icao": "KBNA",
+        "name": "Nashville International Airport",
+        "state": "Tennessee",
+        "country": "United States"
+    },
+    {
+        "city": "Austin",
+        "iata": "AUS",
+        "icao": "KAUS",
+        "name": "Austin-Bergstrom International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Corpus Christi",
+        "iata": "CRP",
+        "icao": "KCRP",
+        "name": "Corpus Christi International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Dallas",
+        "iata": "DAL",
+        "icao": "KDAL",
+        "name": "Dallas Love Field",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Dallas-Fort Worth",
+        "iata": "DFW",
+        "icao": "KDFW",
+        "name": "Dallas/Fort Worth International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "El Paso",
+        "iata": "ELP",
+        "icao": "KELP",
+        "name": "El Paso International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Harlingen",
+        "iata": "HRL",
+        "icao": "KHRL",
+        "name": "Valley International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Houston",
+        "iata": "IAH",
+        "icao": "KIAH",
+        "name": "George Bush Intercontinental Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Houston",
+        "iata": "HOU",
+        "icao": "KHOU",
+        "name": "William P. Hobby Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Laredo",
+        "iata": "LRD",
+        "icao": "KLRD",
+        "name": "Laredo International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Lubbock",
+        "iata": "LBB",
+        "icao": "KLBB",
+        "name": "Lubbock Preston Smith International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "McAllen",
+        "iata": "MFE",
+        "icao": "KMFE",
+        "name": "McAllen International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "San Antonio",
+        "iata": "SAT",
+        "icao": "KSAT",
+        "name": "San Antonio International Airport",
+        "state": "Texas",
+        "country": "United States"
+    },
+    {
+        "city": "Salt Lake City",
+        "iata": "SLC",
+        "icao": "KSLC",
+        "name": "Salt Lake City International Airport",
+        "state": "Utah",
+        "country": "United States"
+    },
+    {
+        "city": "Burlington",
+        "iata": "BTV",
+        "icao": "KBTV",
+        "name": "Burlington International Airport",
+        "state": "Vermont",
+        "country": "United States"
+    },
+    {
+        "city": "Norfolk",
+        "iata": "ORF",
+        "icao": "KORF",
+        "name": "Norfolk International Airport",
+        "state": "Virginia",
+        "country": "United States"
+    },
+    {
+        "city": "Richmond",
+        "iata": "RIC",
+        "icao": "KRIC",
+        "name": "Richmond International Airport",
+        "state": "Virginia",
+        "country": "United States"
+    },
+    {
+        "city": "Washington",
+        "iata": "IAD",
+        "icao": "KIAD",
+        "name": "Washington Dulles International Airport",
+        "state": "Virginia",
+        "country": "United States"
+    },
+    {
+        "city": "Bellingham",
+        "iata": "BLI",
+        "icao": "KBLI",
+        "name": "Bellingham International Airport",
+        "state": "Washington",
+        "country": "United States"
+    },
+    {
+        "city": "Seattle",
+        "iata": "SEA",
+        "icao": "KSEA",
+        "name": "Seattle-Tacoma International Airport",
+        "state": "Washington",
+        "country": "United States"
+    },
+    {
+        "city": "Spokane",
+        "iata": "GEG",
+        "icao": "KGEG",
+        "name": "Spokane International Airport",
+        "state": "Washington",
+        "country": "United States"
+    },
+    {
+        "city": "Appleton",
+        "iata": "ATW",
+        "icao": "KATW",
+        "name": "Appleton International Airport",
+        "state": "Wisconsin",
+        "country": "United States"
+    },
+    {
+        "city": "Green Bay",
+        "iata": "GRB",
+        "icao": "KGRB",
+        "name": "Green Bay Austin Straubel International Airport",
+        "state": "Wisconsin",
+        "country": "United States"
+    },
+    {
+        "city": "Milwaukee",
+        "iata": "MKE",
+        "icao": "KMKE",
+        "name": "Milwaukee Mitchell International Airport",
+        "state": "Wisconsin",
+        "country": "United States"
     }
 ]
